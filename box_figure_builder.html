@@ -1,1 +1,1050 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Box Figure Builder</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    :root {
+      color-scheme: light;
+    }
+    body {
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    textarea {
+      resize: vertical;
+    }
+    .input {
+      @apply border border-slate-300 rounded px-2 py-1 w-full text-sm;
+    }
+    .btn {
+      @apply px-3 py-1.5 rounded text-sm font-medium border border-slate-300 bg-white hover:bg-slate-50;
+    }
+    .btn-primary {
+      @apply bg-slate-900 text-white border-slate-900 hover:bg-slate-800;
+    }
+    .btn-danger {
+      @apply bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100;
+    }
+    .section {
+      @apply border border-slate-200 rounded-lg p-3 bg-white shadow-sm;
+    }
+    .label {
+      @apply text-xs font-semibold text-slate-600 uppercase tracking-wide;
+    }
+  </style>
+</head>
+<body class="h-screen bg-slate-100">
+  <div class="h-full flex">
+    <aside class="w-[360px] bg-white border-r border-slate-200 overflow-y-auto p-4 space-y-4" id="sidebar">
+      <!-- Sidebar content -->
+    </aside>
+    <main class="flex-1 p-4">
+      <div class="flex items-center justify-between mb-3">
+        <div>
+          <h1 class="text-xl font-semibold text-slate-800">Box Figure Builder</h1>
+          <p class="text-sm text-slate-500">Build rows of variable-sized boxes with a legend-driven color system.</p>
+        </div>
+        <button class="btn" id="clearStorageBtn">Clear Local Draft</button>
+      </div>
+      <div class="border border-slate-200 rounded-lg bg-white shadow-sm">
+        <div class="p-3 border-b border-slate-200 text-sm text-slate-600">SVG Canvas (scrolls vertically if needed)</div>
+        <div id="canvasContainer" class="overflow-y-auto" style="height: 420px;">
+          <svg id="figureSvg" width="100%" height="420" xmlns="http://www.w3.org/2000/svg"></svg>
+        </div>
+      </div>
+    </main>
+  </div>
 
+  <script>
+    const STORAGE_KEY = "box_figure_builder_state";
+
+    const defaultPalette = [
+      "#2b5fb8",
+      "#4aa3df",
+      "#6cc3ab",
+      "#f6c244",
+      "#e8874a",
+      "#c44f4f",
+      "#8e63b5"
+    ];
+
+    const defaultState = {
+      settings: {
+        spacingPx: 14,
+        rowGapPx: 24,
+        paddingPx: 24,
+        conversionEnabled: false,
+        widthFactor: 1,
+        heightFactor: 1,
+        canvasHeightPx: 420,
+        heightScalePxPerUnit: 12
+      },
+      legendItems: [
+        { key: "Phase 9", label: "Phase 9", colorHex: "#2b5fb8" },
+        { key: "Phase 8", label: "Phase 8", colorHex: "#4aa3df" },
+        { key: "Phase 6", label: "Phase 6", colorHex: "#6cc3ab" },
+        { key: "Phase 5", label: "Phase 5", colorHex: "#f6c244" },
+        { key: "Phase 4", label: "Phase 4", colorHex: "#e8874a" }
+      ],
+      rows: [
+        {
+          name: "Row 1",
+          boxes: [
+            { width_value: 18, height_value: 2, legend_key: "Phase 9", text: "Phase 9" },
+            { width_value: 26, height_value: 3, legend_key: "Phase 8", text: "Phase 8\nHigher" },
+            { width_value: 22, height_value: 4, legend_key: "Phase 6", text: "Phase 6" },
+            { width_value: 16, height_value: 5, legend_key: "Phase 5", text: "Phase 5\nTall" },
+            { width_value: 10, height_value: 3, legend_key: "Phase 4", text: "Phase 4" }
+          ]
+        }
+      ]
+    };
+
+    let state = loadState() || structuredClone(defaultState);
+    let saveTimeout = null;
+
+    function debounceSave() {
+      clearTimeout(saveTimeout);
+      saveTimeout = setTimeout(() => {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      }, 400);
+    }
+
+    function loadState() {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return null;
+      try {
+        return JSON.parse(raw);
+      } catch {
+        return null;
+      }
+    }
+
+    function ensureLegendKey(box) {
+      const keys = state.legendItems.map((item) => item.key);
+      if (!keys.includes(box.legend_key)) {
+        box.legend_key = keys[0] || "";
+      }
+    }
+
+    function renderSidebar() {
+      const sidebar = document.getElementById("sidebar");
+      const legendOptions = state.legendItems
+        .map((item) => `<option value="${escapeHtml(item.key)}">${escapeHtml(item.key)}</option>`)
+        .join("");
+
+      sidebar.innerHTML = `
+        <div class="section space-y-3">
+          <h2 class="text-sm font-semibold text-slate-700">Global Settings</h2>
+          <div class="grid grid-cols-2 gap-3">
+            <label class="space-y-1">
+              <span class="label">Spacing (px)</span>
+              <input type="number" min="0" step="1" class="input" id="spacingPx" value="${state.settings.spacingPx}">
+            </label>
+            <label class="space-y-1">
+              <span class="label">Row Gap (px)</span>
+              <input type="number" min="0" step="1" class="input" id="rowGapPx" value="${state.settings.rowGapPx}">
+            </label>
+            <label class="space-y-1">
+              <span class="label">Padding (px)</span>
+              <input type="number" min="0" step="1" class="input" id="paddingPx" value="${state.settings.paddingPx}">
+            </label>
+            <label class="space-y-1">
+              <span class="label">Canvas Height (px)</span>
+              <input type="number" min="120" step="10" class="input" id="canvasHeightPx" value="${state.settings.canvasHeightPx}">
+            </label>
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <label class="space-y-1">
+              <span class="label">Height Scale (px/unit)</span>
+              <input type="number" min="1" step="1" class="input" id="heightScalePxPerUnit" value="${state.settings.heightScalePxPerUnit}">
+            </label>
+          </div>
+          <div class="flex items-center gap-2">
+            <input type="checkbox" id="conversionEnabled" ${state.settings.conversionEnabled ? "checked" : ""}>
+            <label for="conversionEnabled" class="text-sm text-slate-600">Use conversion factor</label>
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <label class="space-y-1">
+              <span class="label">Width Factor</span>
+              <input type="number" step="0.1" class="input" id="widthFactor" value="${state.settings.widthFactor}">
+            </label>
+            <label class="space-y-1">
+              <span class="label">Height Factor</span>
+              <input type="number" step="0.1" class="input" id="heightFactor" value="${state.settings.heightFactor}">
+            </label>
+          </div>
+          <div class="grid grid-cols-2 gap-2 pt-2">
+            <button class="btn" id="addRowBtn">Add Row</button>
+            <button class="btn" id="loadSampleBtn">Load Sample</button>
+            <button class="btn" id="exportCsvBtn">Export CSV</button>
+            <button class="btn" id="exportJsonBtn">Export JSON</button>
+            <button class="btn" id="exportSvgBtn">Export SVG</button>
+            <button class="btn" id="exportPngBtn">Export PNG</button>
+          </div>
+          <div class="space-y-2">
+            <label class="label">Import CSV</label>
+            <input type="file" accept=".csv,text/csv" class="text-sm" id="importCsvFile">
+            <div class="flex gap-2">
+              <textarea class="input" id="pasteCsv" rows="3" placeholder="Paste CSV here..."></textarea>
+              <button class="btn" id="importCsvBtn">Import</button>
+            </div>
+          </div>
+          <div class="space-y-2">
+            <label class="label">Import JSON</label>
+            <input type="file" accept="application/json,.json" class="text-sm" id="importJsonFile">
+            <textarea class="input" id="pasteJson" rows="3" placeholder="Paste JSON here..."></textarea>
+            <button class="btn" id="importJsonBtn">Import JSON</button>
+          </div>
+        </div>
+
+        <div class="section space-y-3">
+          <div class="flex items-center justify-between">
+            <h2 class="text-sm font-semibold text-slate-700">Legend Editor</h2>
+            <button class="btn" id="addLegendBtn">Add Legend Item</button>
+          </div>
+          <div class="space-y-3">
+            ${state.legendItems.map((item, idx) => `
+              <div class="border border-slate-200 rounded-lg p-2 space-y-2">
+                <div class="flex items-center justify-between">
+                  <span class="text-xs font-semibold text-slate-500">Item ${idx + 1}</span>
+                  <button class="btn btn-danger" data-action="remove-legend" data-index="${idx}">Remove</button>
+                </div>
+                <label class="space-y-1">
+                  <span class="label">Key</span>
+                  <input type="text" class="input" data-action="legend-key" data-index="${idx}" value="${escapeHtml(item.key)}">
+                </label>
+                <label class="space-y-1">
+                  <span class="label">Label</span>
+                  <input type="text" class="input" data-action="legend-label" data-index="${idx}" value="${escapeHtml(item.label)}">
+                </label>
+                <div class="grid grid-cols-2 gap-2">
+                  <label class="space-y-1">
+                    <span class="label">Color</span>
+                    <input type="color" class="input h-9 p-1" data-action="legend-color" data-index="${idx}" value="${escapeHtml(item.colorHex)}">
+                  </label>
+                  <label class="space-y-1">
+                    <span class="label">Hex</span>
+                    <input type="text" class="input" data-action="legend-hex" data-index="${idx}" value="${escapeHtml(item.colorHex)}">
+                  </label>
+                </div>
+              </div>
+            `).join("")}
+          </div>
+        </div>
+
+        <div class="section space-y-3">
+          <h2 class="text-sm font-semibold text-slate-700">Rows & Boxes</h2>
+          <div class="space-y-4">
+            ${state.rows.map((row, rowIndex) => `
+              <div class="border border-slate-200 rounded-lg p-2 space-y-2">
+                <div class="flex items-center justify-between">
+                  <div class="flex-1">
+                    <label class="space-y-1">
+                      <span class="label">Row Name</span>
+                      <input type="text" class="input" data-action="row-name" data-row="${rowIndex}" value="${escapeHtml(row.name)}">
+                    </label>
+                  </div>
+                  <div class="flex gap-1 pl-2">
+                    <button class="btn" data-action="row-up" data-row="${rowIndex}">↑</button>
+                    <button class="btn" data-action="row-down" data-row="${rowIndex}">↓</button>
+                    <button class="btn btn-danger" data-action="row-delete" data-row="${rowIndex}">Delete</button>
+                  </div>
+                </div>
+                <div class="space-y-2">
+                  ${row.boxes.map((box, boxIndex) => `
+                    <div class="border border-slate-200 rounded-lg p-2 space-y-2">
+                      <div class="flex items-center justify-between">
+                        <span class="text-xs font-semibold text-slate-500">Box ${boxIndex + 1}</span>
+                        <div class="flex gap-1">
+                          <button class="btn" data-action="box-left" data-row="${rowIndex}" data-box="${boxIndex}">←</button>
+                          <button class="btn" data-action="box-right" data-row="${rowIndex}" data-box="${boxIndex}">→</button>
+                          <button class="btn" data-action="box-duplicate" data-row="${rowIndex}" data-box="${boxIndex}">Duplicate</button>
+                          <button class="btn btn-danger" data-action="box-delete" data-row="${rowIndex}" data-box="${boxIndex}">Delete</button>
+                        </div>
+                      </div>
+                      <div class="grid grid-cols-2 gap-2">
+                        <label class="space-y-1">
+                          <span class="label">Width</span>
+                          <input type="number" step="0.1" class="input" data-action="box-width" data-row="${rowIndex}" data-box="${boxIndex}" value="${box.width_value}">
+                        </label>
+                        <label class="space-y-1">
+                          <span class="label">Height</span>
+                          <input type="number" step="0.1" class="input" data-action="box-height" data-row="${rowIndex}" data-box="${boxIndex}" value="${box.height_value}">
+                        </label>
+                      </div>
+                      <label class="space-y-1">
+                        <span class="label">Legend Key</span>
+                        <select class="input" data-action="box-legend" data-row="${rowIndex}" data-box="${boxIndex}">
+                          ${legendOptions}
+                        </select>
+                      </label>
+                      <label class="space-y-1">
+                        <span class="label">Text</span>
+                        <textarea class="input" rows="3" data-action="box-text" data-row="${rowIndex}" data-box="${boxIndex}">${escapeHtml(box.text)}</textarea>
+                      </label>
+                    </div>
+                  `).join("")}
+                </div>
+                <button class="btn" data-action="box-add" data-row="${rowIndex}">Add Box</button>
+              </div>
+            `).join("")}
+          </div>
+        </div>
+      `;
+
+      document.querySelectorAll("select[data-action='box-legend']").forEach((select) => {
+        const rowIndex = Number(select.dataset.row);
+        const boxIndex = Number(select.dataset.box);
+        select.value = state.rows[rowIndex].boxes[boxIndex].legend_key;
+      });
+
+      bindSidebarEvents();
+    }
+
+    function bindSidebarEvents() {
+      const settingsMap = {
+        spacingPx: "spacingPx",
+        rowGapPx: "rowGapPx",
+        paddingPx: "paddingPx",
+        widthFactor: "widthFactor",
+        heightFactor: "heightFactor",
+        canvasHeightPx: "canvasHeightPx",
+        heightScalePxPerUnit: "heightScalePxPerUnit"
+      };
+
+      Object.keys(settingsMap).forEach((id) => {
+        const input = document.getElementById(id);
+        if (!input) return;
+        input.addEventListener("input", (event) => {
+          const key = settingsMap[id];
+          const value = Number(event.target.value);
+          if (!Number.isNaN(value)) {
+            state.settings[key] = value;
+            applyCanvasHeight();
+            renderFigure();
+            debounceSave();
+          }
+        });
+      });
+
+      const conversionToggle = document.getElementById("conversionEnabled");
+      if (conversionToggle) {
+        conversionToggle.addEventListener("change", (event) => {
+          state.settings.conversionEnabled = event.target.checked;
+          renderFigure();
+          debounceSave();
+        });
+      }
+
+      document.getElementById("addRowBtn").addEventListener("click", () => {
+        state.rows.push({ name: `Row ${state.rows.length + 1}`, boxes: [] });
+        renderAll();
+        debounceSave();
+      });
+
+      document.getElementById("loadSampleBtn").addEventListener("click", () => {
+        state = structuredClone(defaultState);
+        renderAll();
+        debounceSave();
+      });
+
+      document.getElementById("exportCsvBtn").addEventListener("click", exportCsv);
+      document.getElementById("exportJsonBtn").addEventListener("click", exportJson);
+      document.getElementById("exportSvgBtn").addEventListener("click", exportSvg);
+      document.getElementById("exportPngBtn").addEventListener("click", exportPng);
+
+      document.getElementById("importCsvBtn").addEventListener("click", () => {
+        const text = document.getElementById("pasteCsv").value.trim();
+        if (text) importCsv(text);
+      });
+
+      document.getElementById("importCsvFile").addEventListener("change", (event) => {
+        const file = event.target.files[0];
+        if (!file) return;
+        file.text().then((text) => importCsv(text));
+      });
+
+      document.getElementById("importJsonBtn").addEventListener("click", () => {
+        const text = document.getElementById("pasteJson").value.trim();
+        if (text) importJson(text);
+      });
+
+      document.getElementById("importJsonFile").addEventListener("change", (event) => {
+        const file = event.target.files[0];
+        if (!file) return;
+        file.text().then((text) => importJson(text));
+      });
+
+      document.getElementById("addLegendBtn").addEventListener("click", () => {
+        const nextColor = defaultPalette[state.legendItems.length % defaultPalette.length];
+        state.legendItems.push({ key: `Legend ${state.legendItems.length + 1}`, label: "New Item", colorHex: nextColor });
+        renderAll();
+        debounceSave();
+      });
+
+      document.querySelectorAll("[data-action='remove-legend']").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const idx = Number(btn.dataset.index);
+          const removed = state.legendItems.splice(idx, 1)[0];
+          state.rows.forEach((row) => {
+            row.boxes.forEach((box) => {
+              if (box.legend_key === removed.key) {
+                ensureLegendKey(box);
+              }
+            });
+          });
+          renderAll();
+          debounceSave();
+        });
+      });
+
+      document.querySelectorAll("[data-action='legend-key']").forEach((input) => {
+        input.addEventListener("input", () => {
+          const idx = Number(input.dataset.index);
+          const oldKey = state.legendItems[idx].key;
+          const newKey = input.value.trim() || oldKey;
+          state.legendItems[idx].key = newKey;
+          state.rows.forEach((row) => {
+            row.boxes.forEach((box) => {
+              if (box.legend_key === oldKey) {
+                box.legend_key = newKey;
+              }
+            });
+          });
+          renderAll();
+          debounceSave();
+        });
+      });
+
+      document.querySelectorAll("[data-action='legend-label']").forEach((input) => {
+        input.addEventListener("input", () => {
+          const idx = Number(input.dataset.index);
+          state.legendItems[idx].label = input.value;
+          renderFigure();
+          debounceSave();
+        });
+      });
+
+      document.querySelectorAll("[data-action='legend-color']").forEach((input) => {
+        input.addEventListener("input", () => {
+          const idx = Number(input.dataset.index);
+          state.legendItems[idx].colorHex = input.value;
+          const hexInput = document.querySelector(`[data-action='legend-hex'][data-index='${idx}']`);
+          if (hexInput) hexInput.value = input.value;
+          renderFigure();
+          debounceSave();
+        });
+      });
+
+      document.querySelectorAll("[data-action='legend-hex']").forEach((input) => {
+        input.addEventListener("input", () => {
+          const idx = Number(input.dataset.index);
+          const value = normalizeHex(input.value);
+          if (value) {
+            state.legendItems[idx].colorHex = value;
+            const picker = document.querySelector(`[data-action='legend-color'][data-index='${idx}']`);
+            if (picker) picker.value = value;
+            renderFigure();
+            debounceSave();
+          }
+        });
+      });
+
+      document.querySelectorAll("[data-action='row-name']").forEach((input) => {
+        input.addEventListener("input", () => {
+          const rowIndex = Number(input.dataset.row);
+          state.rows[rowIndex].name = input.value;
+          debounceSave();
+        });
+      });
+
+      document.querySelectorAll("[data-action='row-up']").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const rowIndex = Number(btn.dataset.row);
+          if (rowIndex === 0) return;
+          const [row] = state.rows.splice(rowIndex, 1);
+          state.rows.splice(rowIndex - 1, 0, row);
+          renderAll();
+          debounceSave();
+        });
+      });
+
+      document.querySelectorAll("[data-action='row-down']").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const rowIndex = Number(btn.dataset.row);
+          if (rowIndex === state.rows.length - 1) return;
+          const [row] = state.rows.splice(rowIndex, 1);
+          state.rows.splice(rowIndex + 1, 0, row);
+          renderAll();
+          debounceSave();
+        });
+      });
+
+      document.querySelectorAll("[data-action='row-delete']").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const rowIndex = Number(btn.dataset.row);
+          state.rows.splice(rowIndex, 1);
+          renderAll();
+          debounceSave();
+        });
+      });
+
+      document.querySelectorAll("[data-action='box-add']").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const rowIndex = Number(btn.dataset.row);
+          const legendKey = state.legendItems[0]?.key || "";
+          state.rows[rowIndex].boxes.push({
+            width_value: 10,
+            height_value: 3,
+            legend_key: legendKey,
+            text: "New Box"
+          });
+          renderAll();
+          debounceSave();
+        });
+      });
+
+      document.querySelectorAll("[data-action='box-width']").forEach((input) => {
+        input.addEventListener("input", () => {
+          const rowIndex = Number(input.dataset.row);
+          const boxIndex = Number(input.dataset.box);
+          const value = Number(input.value);
+          if (!Number.isNaN(value)) {
+            state.rows[rowIndex].boxes[boxIndex].width_value = value;
+            renderFigure();
+            debounceSave();
+          }
+        });
+      });
+
+      document.querySelectorAll("[data-action='box-height']").forEach((input) => {
+        input.addEventListener("input", () => {
+          const rowIndex = Number(input.dataset.row);
+          const boxIndex = Number(input.dataset.box);
+          const value = Number(input.value);
+          if (!Number.isNaN(value)) {
+            state.rows[rowIndex].boxes[boxIndex].height_value = value;
+            renderFigure();
+            debounceSave();
+          }
+        });
+      });
+
+      document.querySelectorAll("[data-action='box-legend']").forEach((select) => {
+        select.addEventListener("change", () => {
+          const rowIndex = Number(select.dataset.row);
+          const boxIndex = Number(select.dataset.box);
+          state.rows[rowIndex].boxes[boxIndex].legend_key = select.value;
+          renderFigure();
+          debounceSave();
+        });
+      });
+
+      document.querySelectorAll("[data-action='box-text']").forEach((textarea) => {
+        textarea.addEventListener("input", () => {
+          const rowIndex = Number(textarea.dataset.row);
+          const boxIndex = Number(textarea.dataset.box);
+          state.rows[rowIndex].boxes[boxIndex].text = textarea.value;
+          renderFigure();
+          debounceSave();
+        });
+      });
+
+      document.querySelectorAll("[data-action='box-left']").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const rowIndex = Number(btn.dataset.row);
+          const boxIndex = Number(btn.dataset.box);
+          if (boxIndex === 0) return;
+          const boxes = state.rows[rowIndex].boxes;
+          const [box] = boxes.splice(boxIndex, 1);
+          boxes.splice(boxIndex - 1, 0, box);
+          renderAll();
+          debounceSave();
+        });
+      });
+
+      document.querySelectorAll("[data-action='box-right']").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const rowIndex = Number(btn.dataset.row);
+          const boxIndex = Number(btn.dataset.box);
+          const boxes = state.rows[rowIndex].boxes;
+          if (boxIndex >= boxes.length - 1) return;
+          const [box] = boxes.splice(boxIndex, 1);
+          boxes.splice(boxIndex + 1, 0, box);
+          renderAll();
+          debounceSave();
+        });
+      });
+
+      document.querySelectorAll("[data-action='box-duplicate']").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const rowIndex = Number(btn.dataset.row);
+          const boxIndex = Number(btn.dataset.box);
+          const boxes = state.rows[rowIndex].boxes;
+          const clone = { ...boxes[boxIndex] };
+          boxes.splice(boxIndex + 1, 0, clone);
+          renderAll();
+          debounceSave();
+        });
+      });
+
+      document.querySelectorAll("[data-action='box-delete']").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const rowIndex = Number(btn.dataset.row);
+          const boxIndex = Number(btn.dataset.box);
+          state.rows[rowIndex].boxes.splice(boxIndex, 1);
+          renderAll();
+          debounceSave();
+        });
+      });
+    }
+
+    function applyCanvasHeight() {
+      const container = document.getElementById("canvasContainer");
+      container.style.height = `${state.settings.canvasHeightPx}px`;
+    }
+
+    function renderFigure() {
+      const svg = document.getElementById("figureSvg");
+      const container = document.getElementById("canvasContainer");
+      const width = container.clientWidth || 800;
+      const {
+        spacingPx,
+        rowGapPx,
+        paddingPx,
+        conversionEnabled,
+        widthFactor,
+        heightFactor,
+        heightScalePxPerUnit
+      } = state.settings;
+
+      const rows = state.rows.map((row) => {
+        const boxes = row.boxes.map((box) => {
+          const widthUnits = conversionEnabled ? box.width_value * widthFactor : box.width_value;
+          const heightUnits = conversionEnabled ? box.height_value * heightFactor : box.height_value;
+          return {
+            ...box,
+            widthUnits: Number.isFinite(widthUnits) ? widthUnits : 0,
+            heightUnits: Number.isFinite(heightUnits) ? heightUnits : 0
+          };
+        });
+        return { ...row, boxes };
+      });
+
+      const rowUnitsList = rows.map((row) => row.boxes.reduce((sum, box) => sum + Math.max(0, box.widthUnits), 0));
+      const maxRowUnits = rowUnitsList.length ? Math.max(...rowUnitsList) : 0;
+      const maxRowBoxCount = rows.reduce((max, row, idx) => {
+        if (rowUnitsList[idx] === maxRowUnits) {
+          return Math.max(max, row.boxes.length);
+        }
+        return max;
+      }, 1);
+
+      const availableWidthPx = Math.max(0, width - 2 * paddingPx);
+      let scaleX = 0;
+      if (maxRowUnits > 0) {
+        const spacingTotal = spacingPx * Math.max(0, maxRowBoxCount - 1);
+        scaleX = (availableWidthPx - spacingTotal) / maxRowUnits;
+        if (!Number.isFinite(scaleX) || scaleX < 0) scaleX = 0;
+      }
+
+      let yCursor = paddingPx;
+      const elements = [];
+
+      rows.forEach((row) => {
+        const rowMaxHeightPx = row.boxes.length
+          ? Math.max(...row.boxes.map((box) => Math.max(0, box.heightUnits * heightScalePxPerUnit)))
+          : 0;
+        const rowCenterY = yCursor + rowMaxHeightPx / 2;
+        let xCursor = paddingPx;
+        row.boxes.forEach((box) => {
+          const widthPx = Math.max(0, box.widthUnits * scaleX);
+          const heightPx = Math.max(0, box.heightUnits * heightScalePxPerUnit);
+          const fill = legendColor(box.legend_key);
+          const textColor = autoTextColor(fill);
+          const y = rowCenterY - heightPx / 2;
+          const rx = Math.min(10, heightPx / 4);
+
+          elements.push(`
+            <rect x="${xCursor}" y="${y}" width="${widthPx}" height="${heightPx}" rx="${rx}" fill="${fill}" stroke="rgba(0,0,0,0.08)" />
+          `);
+
+          if (box.text && widthPx > 0 && heightPx > 0) {
+            const lines = box.text.split("\n");
+            const lineHeight = 14;
+            const startY = rowCenterY - ((lines.length - 1) * lineHeight) / 2;
+            const centerX = xCursor + widthPx / 2;
+            elements.push(`<text x="${centerX}" y="${startY}" fill="${textColor}" font-size="12" text-anchor="middle">`);
+            lines.forEach((line, index) => {
+              const yLine = startY + index * lineHeight;
+              elements.push(`<tspan x="${centerX}" y="${yLine}">${escapeHtml(line)}</tspan>`);
+            });
+            elements.push(`</text>`);
+          }
+
+          xCursor += widthPx + spacingPx;
+        });
+        yCursor += rowMaxHeightPx + rowGapPx;
+      });
+
+      const legendStartY = yCursor + 18;
+      const legendLayout = layoutLegend(width, paddingPx, legendStartY);
+      elements.push(...legendLayout.elements);
+
+      const contentHeight = Math.max(state.settings.canvasHeightPx, legendLayout.bottom + paddingPx);
+      elements.unshift(`<rect x="0" y="0" width="${width}" height="${contentHeight}" fill="#f7f7f5"></rect>`);
+      svg.setAttribute("width", width);
+      svg.setAttribute("height", contentHeight);
+      svg.setAttribute("viewBox", `0 0 ${width} ${contentHeight}`);
+      svg.innerHTML = `
+        <style>
+          text { font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+        </style>
+        ${elements.join("\n")}
+      `;
+    }
+
+    function layoutLegend(width, paddingPx, startY) {
+      const rectSize = 18;
+      const gap = 10;
+      const rowGap = 10;
+      let x = paddingPx;
+      let y = startY;
+      const maxX = width - paddingPx;
+      const elements = [];
+
+      state.legendItems.forEach((item) => {
+        const label = item.label || item.key;
+        const textWidth = Math.max(20, label.length * 7);
+        const itemWidth = rectSize + 6 + textWidth + 12;
+
+        if (x + itemWidth > maxX) {
+          x = paddingPx;
+          y += rectSize + rowGap;
+        }
+
+        elements.push(`<rect x="${x}" y="${y}" width="${rectSize}" height="${rectSize}" rx="4" fill="${item.colorHex}" stroke="rgba(0,0,0,0.1)" />`);
+        elements.push(`<text x="${x + rectSize + 6}" y="${y + rectSize * 0.7}" fill="#1f2933" font-size="12">${escapeHtml(label)}</text>`);
+
+        x += itemWidth + gap;
+      });
+
+      return { elements, bottom: y + rectSize };
+    }
+
+    function legendColor(key) {
+      const item = state.legendItems.find((legend) => legend.key === key);
+      return item ? item.colorHex : "#cbd5f5";
+    }
+
+    function autoTextColor(hex) {
+      const rgb = hexToRgb(hex);
+      if (!rgb) return "#111827";
+      const luminance = (0.299 * rgb.r + 0.587 * rgb.g + 0.114 * rgb.b) / 255;
+      return luminance > 0.6 ? "#111827" : "#ffffff";
+    }
+
+    function hexToRgb(hex) {
+      const normalized = normalizeHex(hex);
+      if (!normalized) return null;
+      const value = normalized.replace("#", "");
+      const r = parseInt(value.substring(0, 2), 16);
+      const g = parseInt(value.substring(2, 4), 16);
+      const b = parseInt(value.substring(4, 6), 16);
+      return { r, g, b };
+    }
+
+    function normalizeHex(value) {
+      const trimmed = value.trim();
+      if (/^#?[0-9a-fA-F]{6}$/.test(trimmed)) {
+        return trimmed.startsWith("#") ? trimmed.toLowerCase() : `#${trimmed.toLowerCase()}`;
+      }
+      return null;
+    }
+
+    function exportCsv() {
+      const lines = [];
+      const settings = state.settings;
+      lines.push(`# spacingPx=${settings.spacingPx}`);
+      lines.push(`# rowGapPx=${settings.rowGapPx}`);
+      lines.push(`# paddingPx=${settings.paddingPx}`);
+      lines.push(`# canvasHeightPx=${settings.canvasHeightPx}`);
+      lines.push(`# conversionEnabled=${settings.conversionEnabled}`);
+      lines.push(`# widthFactor=${settings.widthFactor}`);
+      lines.push(`# heightFactor=${settings.heightFactor}`);
+      lines.push(`# heightScalePxPerUnit=${settings.heightScalePxPerUnit}`);
+      state.legendItems.forEach((item) => {
+        lines.push(`# legend=${item.key}|${item.label}|${item.colorHex}`);
+      });
+      lines.push("row,box,width,height,legend,text");
+
+      state.rows.forEach((row, rowIndex) => {
+        row.boxes.forEach((box, boxIndex) => {
+          const rowValue = rowIndex + 1;
+          const boxValue = boxIndex + 1;
+          const cells = [
+            rowValue,
+            boxValue,
+            box.width_value,
+            box.height_value,
+            box.legend_key,
+            box.text
+          ];
+          lines.push(cells.map(csvEscape).join(","));
+        });
+      });
+
+      downloadFile(lines.join("\n"), "box_figure.csv", "text/csv");
+    }
+
+    function importCsv(text) {
+      const { metadataLines, csvText } = extractMetadata(text);
+      const newState = {
+        settings: { ...defaultState.settings },
+        legendItems: [],
+        rows: []
+      };
+
+      metadataLines.forEach((line) => {
+        const trimmed = line.replace(/^#\s*/, "");
+        if (trimmed.startsWith("legend=")) {
+          const data = trimmed.replace("legend=", "").split("|");
+          if (data.length >= 3) {
+            newState.legendItems.push({ key: data[0], label: data[1], colorHex: data[2] });
+          }
+        } else {
+          const [key, value] = trimmed.split("=");
+          if (!key || value === undefined) return;
+          if (key in newState.settings) {
+            if (key === "conversionEnabled") {
+              newState.settings[key] = value.trim() === "true";
+            } else {
+              const num = Number(value.trim());
+              if (!Number.isNaN(num)) newState.settings[key] = num;
+            }
+          }
+        }
+      });
+
+      if (newState.legendItems.length === 0) {
+        newState.legendItems = [];
+      }
+
+      const rows = parseCSV(csvText);
+      if (!rows.length) return;
+      const header = rows[0].map((cell) => cell.trim());
+      const rowIndex = header.indexOf("row");
+      const boxIndex = header.indexOf("box");
+      const widthIndex = header.indexOf("width");
+      const heightIndex = header.indexOf("height");
+      const legendIndex = header.indexOf("legend");
+      const textIndex = header.indexOf("text");
+      const rowMap = new Map();
+
+      rows.slice(1).forEach((cells) => {
+        const rowNumber = Number(cells[rowIndex]);
+        const boxNumber = Number(cells[boxIndex]);
+        if (!rowNumber || !boxNumber) return;
+        const rowKey = rowNumber - 1;
+        if (!rowMap.has(rowKey)) {
+          rowMap.set(rowKey, { name: `Row ${rowNumber}`, boxes: [] });
+        }
+        const row = rowMap.get(rowKey);
+        row.boxes.push({
+          width_value: Number(cells[widthIndex] || 0),
+          height_value: Number(cells[heightIndex] || 0),
+          legend_key: cells[legendIndex] || "",
+          text: cells[textIndex] || ""
+        });
+      });
+
+      newState.rows = Array.from(rowMap.keys())
+        .sort((a, b) => a - b)
+        .map((key) => rowMap.get(key));
+
+      if (newState.legendItems.length === 0) {
+        const keys = new Set();
+        newState.rows.forEach((row) => {
+          row.boxes.forEach((box) => keys.add(box.legend_key));
+        });
+        newState.legendItems = Array.from(keys).map((key, index) => ({
+          key,
+          label: key,
+          colorHex: defaultPalette[index % defaultPalette.length]
+        }));
+      }
+
+      newState.rows.forEach((row) => row.boxes.forEach((box) => ensureLegendKey(box)));
+      state = newState;
+      applyCanvasHeight();
+      renderAll();
+      debounceSave();
+    }
+
+    function extractMetadata(text) {
+      const lines = text.split(/\r?\n/);
+      const metadataLines = [];
+      let startIndex = 0;
+      while (startIndex < lines.length) {
+        const line = lines[startIndex];
+        if (line.trim().startsWith("#")) {
+          metadataLines.push(line.trim());
+          startIndex += 1;
+        } else if (line.trim() === "") {
+          startIndex += 1;
+        } else {
+          break;
+        }
+      }
+      return { metadataLines, csvText: lines.slice(startIndex).join("\n") };
+    }
+
+    function parseCSV(text) {
+      const rows = [];
+      let current = "";
+      let row = [];
+      let inQuotes = false;
+      for (let i = 0; i < text.length; i += 1) {
+        const char = text[i];
+        const next = text[i + 1];
+        if (char === '"') {
+          if (inQuotes && next === '"') {
+            current += '"';
+            i += 1;
+          } else {
+            inQuotes = !inQuotes;
+          }
+        } else if (char === "," && !inQuotes) {
+          row.push(current);
+          current = "";
+        } else if ((char === "\n" || char === "\r") && !inQuotes) {
+          if (char === "\r" && next === "\n") i += 1;
+          row.push(current);
+          if (row.some((cell) => cell !== "")) {
+            rows.push(row);
+          }
+          row = [];
+          current = "";
+        } else {
+          current += char;
+        }
+      }
+      row.push(current);
+      if (row.some((cell) => cell !== "")) {
+        rows.push(row);
+      }
+      return rows;
+    }
+
+    function csvEscape(value) {
+      const stringValue = String(value ?? "");
+      if (/[",\n]/.test(stringValue)) {
+        return `"${stringValue.replace(/"/g, '""')}"`;
+      }
+      return stringValue;
+    }
+
+    function exportJson() {
+      const data = JSON.stringify(state, null, 2);
+      downloadFile(data, "box_figure.json", "application/json");
+    }
+
+    function importJson(text) {
+      try {
+        const parsed = JSON.parse(text);
+        if (parsed && parsed.settings && parsed.rows && parsed.legendItems) {
+          state = parsed;
+          state.rows.forEach((row) => row.boxes.forEach((box) => ensureLegendKey(box)));
+          applyCanvasHeight();
+          renderAll();
+          debounceSave();
+        }
+      } catch {
+        alert("Invalid JSON file.");
+      }
+    }
+
+    function exportSvg() {
+      const svg = document.getElementById("figureSvg");
+      const serialized = serializeSvg(svg);
+      downloadFile(serialized, "box_figure.svg", "image/svg+xml;charset=utf-8");
+    }
+
+    function exportPng() {
+      const svg = document.getElementById("figureSvg");
+      const serialized = serializeSvg(svg);
+      const svgBlob = new Blob([serialized], { type: "image/svg+xml;charset=utf-8" });
+      const url = URL.createObjectURL(svgBlob);
+      const image = new Image();
+      image.onload = () => {
+        const scale = 2;
+        const canvas = document.createElement("canvas");
+        canvas.width = image.width * scale;
+        canvas.height = image.height * scale;
+        const ctx = canvas.getContext("2d");
+        ctx.scale(scale, scale);
+        ctx.drawImage(image, 0, 0);
+        canvas.toBlob((blob) => {
+          if (blob) {
+            downloadBlob(blob, "box_figure.png");
+          }
+          URL.revokeObjectURL(url);
+        }, "image/png");
+      };
+      image.src = url;
+    }
+
+    function serializeSvg(svg) {
+      const clone = svg.cloneNode(true);
+      clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+      return new XMLSerializer().serializeToString(clone);
+    }
+
+    function downloadFile(data, filename, type) {
+      const blob = new Blob([data], { type });
+      downloadBlob(blob, filename);
+    }
+
+    function downloadBlob(blob, filename) {
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    }
+
+    function escapeHtml(str) {
+      return String(str ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    }
+
+    document.getElementById("clearStorageBtn").addEventListener("click", () => {
+      localStorage.removeItem(STORAGE_KEY);
+      state = structuredClone(defaultState);
+      renderAll();
+    });
+
+    window.addEventListener("resize", () => {
+      renderFigure();
+    });
+
+    function renderAll() {
+      renderSidebar();
+      applyCanvasHeight();
+      renderFigure();
+    }
+
+    renderAll();
+  </script>
+</body>
+</html>
