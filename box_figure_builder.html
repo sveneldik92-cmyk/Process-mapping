@@ -16,22 +16,106 @@
       resize: vertical;
     }
     .input {
-      @apply border border-slate-300 rounded px-2 py-1 w-full text-sm;
+      width: 100%;
+      border: 1px solid #cbd5f5;
+      border-radius: 0.375rem;
+      padding: 0.35rem 0.5rem;
+      font-size: 0.85rem;
+      background-color: #fff;
     }
     .btn {
-      @apply px-3 py-1.5 rounded text-sm font-medium border border-slate-300 bg-white hover:bg-slate-50;
+      padding: 0.35rem 0.75rem;
+      border-radius: 0.375rem;
+      font-size: 0.85rem;
+      font-weight: 600;
+      border: 1px solid #cbd5f5;
+      background-color: #fff;
+      color: #1f2937;
+      transition: background-color 0.15s ease, border-color 0.15s ease;
+    }
+    .btn:hover {
+      background-color: #f8fafc;
     }
     .btn-primary {
-      @apply bg-slate-900 text-white border-slate-900 hover:bg-slate-800;
+      background-color: #0f172a;
+      border-color: #0f172a;
+      color: #fff;
+    }
+    .btn-primary:hover {
+      background-color: #1e293b;
     }
     .btn-danger {
-      @apply bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100;
+      background-color: #fff1f2;
+      border-color: #fecdd3;
+      color: #be123c;
+    }
+    .btn-danger:hover {
+      background-color: #ffe4e6;
     }
     .section {
-      @apply border border-slate-200 rounded-lg p-3 bg-white shadow-sm;
+      border: 1px solid #e2e8f0;
+      border-radius: 0.75rem;
+      padding: 0.75rem;
+      background-color: #fff;
+      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
     }
     .label {
-      @apply text-xs font-semibold text-slate-600 uppercase tracking-wide;
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #64748b;
+    }
+    details.section summary {
+      cursor: pointer;
+      list-style: none;
+    }
+    details.section summary::-webkit-details-marker {
+      display: none;
+    }
+    .section-summary {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+      font-weight: 600;
+      color: #0f172a;
+    }
+    .section-summary span {
+      font-size: 0.9rem;
+    }
+    .summary-caret {
+      width: 0.6rem;
+      height: 0.6rem;
+      border-right: 2px solid #94a3b8;
+      border-bottom: 2px solid #94a3b8;
+      transform: rotate(-45deg);
+      transition: transform 0.2s ease;
+    }
+    details[open] .summary-caret {
+      transform: rotate(45deg);
+    }
+    .sidebar-grid {
+      display: grid;
+      gap: 0.5rem 0.75rem;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .sidebar-actions {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 0.5rem;
+    }
+    .item-card {
+      border: 1px solid #e2e8f0;
+      border-radius: 0.75rem;
+      padding: 0.5rem;
+      background-color: #f8fafc;
+    }
+    .item-card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
     }
   </style>
 </head>
@@ -136,9 +220,12 @@
         .join("");
 
       sidebar.innerHTML = `
-        <div class="section space-y-3">
-          <h2 class="text-sm font-semibold text-slate-700">Global Settings</h2>
-          <div class="grid grid-cols-2 gap-3">
+        <details class="section space-y-3" open>
+          <summary class="section-summary">
+            <span>Global Settings</span>
+            <span class="summary-caret"></span>
+          </summary>
+          <div class="sidebar-grid">
             <label class="space-y-1">
               <span class="label">Spacing (px)</span>
               <input type="number" min="0" step="1" class="input" id="spacingPx" value="${state.settings.spacingPx}">
@@ -155,18 +242,16 @@
               <span class="label">Canvas Height (px)</span>
               <input type="number" min="120" step="10" class="input" id="canvasHeightPx" value="${state.settings.canvasHeightPx}">
             </label>
-          </div>
-          <div class="grid grid-cols-2 gap-3">
             <label class="space-y-1">
               <span class="label">Height Scale (px/unit)</span>
               <input type="number" min="1" step="1" class="input" id="heightScalePxPerUnit" value="${state.settings.heightScalePxPerUnit}">
             </label>
           </div>
-          <div class="flex items-center gap-2">
+          <div class="flex items-center gap-2 pt-2">
             <input type="checkbox" id="conversionEnabled" ${state.settings.conversionEnabled ? "checked" : ""}>
             <label for="conversionEnabled" class="text-sm text-slate-600">Use conversion factor</label>
           </div>
-          <div class="grid grid-cols-2 gap-3">
+          <div class="sidebar-grid">
             <label class="space-y-1">
               <span class="label">Width Factor</span>
               <input type="number" step="0.1" class="input" id="widthFactor" value="${state.settings.widthFactor}">
@@ -176,7 +261,7 @@
               <input type="number" step="0.1" class="input" id="heightFactor" value="${state.settings.heightFactor}">
             </label>
           </div>
-          <div class="grid grid-cols-2 gap-2 pt-2">
+          <div class="sidebar-actions pt-2">
             <button class="btn" id="addRowBtn">Add Row</button>
             <button class="btn" id="loadSampleBtn">Load Sample</button>
             <button class="btn" id="exportCsvBtn">Export CSV</button>
@@ -187,40 +272,42 @@
           <div class="space-y-2">
             <label class="label">Import CSV</label>
             <input type="file" accept=".csv,text/csv" class="text-sm" id="importCsvFile">
-            <div class="flex gap-2">
-              <textarea class="input" id="pasteCsv" rows="3" placeholder="Paste CSV here..."></textarea>
-              <button class="btn" id="importCsvBtn">Import</button>
-            </div>
+            <textarea class="input" id="pasteCsv" rows="3" placeholder="Paste CSV here..."></textarea>
+            <button class="btn w-full" id="importCsvBtn">Import CSV</button>
           </div>
           <div class="space-y-2">
             <label class="label">Import JSON</label>
             <input type="file" accept="application/json,.json" class="text-sm" id="importJsonFile">
             <textarea class="input" id="pasteJson" rows="3" placeholder="Paste JSON here..."></textarea>
-            <button class="btn" id="importJsonBtn">Import JSON</button>
+            <button class="btn w-full" id="importJsonBtn">Import JSON</button>
           </div>
-        </div>
+        </details>
 
-        <div class="section space-y-3">
+        <details class="section space-y-3" open>
+          <summary class="section-summary">
+            <span>Legend Editor</span>
+            <span class="summary-caret"></span>
+          </summary>
           <div class="flex items-center justify-between">
-            <h2 class="text-sm font-semibold text-slate-700">Legend Editor</h2>
+            <span class="text-xs text-slate-500">Legend categories control box colors.</span>
             <button class="btn" id="addLegendBtn">Add Legend Item</button>
           </div>
           <div class="space-y-3">
             ${state.legendItems.map((item, idx) => `
-              <div class="border border-slate-200 rounded-lg p-2 space-y-2">
-                <div class="flex items-center justify-between">
+              <div class="item-card space-y-2">
+                <div class="item-card-header">
                   <span class="text-xs font-semibold text-slate-500">Item ${idx + 1}</span>
                   <button class="btn btn-danger" data-action="remove-legend" data-index="${idx}">Remove</button>
                 </div>
-                <label class="space-y-1">
-                  <span class="label">Key</span>
-                  <input type="text" class="input" data-action="legend-key" data-index="${idx}" value="${escapeHtml(item.key)}">
-                </label>
-                <label class="space-y-1">
-                  <span class="label">Label</span>
-                  <input type="text" class="input" data-action="legend-label" data-index="${idx}" value="${escapeHtml(item.label)}">
-                </label>
-                <div class="grid grid-cols-2 gap-2">
+                <div class="sidebar-grid">
+                  <label class="space-y-1">
+                    <span class="label">Key</span>
+                    <input type="text" class="input" data-action="legend-key" data-index="${idx}" value="${escapeHtml(item.key)}">
+                  </label>
+                  <label class="space-y-1">
+                    <span class="label">Label</span>
+                    <input type="text" class="input" data-action="legend-label" data-index="${idx}" value="${escapeHtml(item.label)}">
+                  </label>
                   <label class="space-y-1">
                     <span class="label">Color</span>
                     <input type="color" class="input h-9 p-1" data-action="legend-color" data-index="${idx}" value="${escapeHtml(item.colorHex)}">
@@ -233,39 +320,44 @@
               </div>
             `).join("")}
           </div>
-        </div>
+        </details>
 
-        <div class="section space-y-3">
-          <h2 class="text-sm font-semibold text-slate-700">Rows & Boxes</h2>
+        <details class="section space-y-3" open>
+          <summary class="section-summary">
+            <span>Rows & Boxes</span>
+            <span class="summary-caret"></span>
+          </summary>
           <div class="space-y-4">
             ${state.rows.map((row, rowIndex) => `
-              <div class="border border-slate-200 rounded-lg p-2 space-y-2">
-                <div class="flex items-center justify-between">
-                  <div class="flex-1">
-                    <label class="space-y-1">
-                      <span class="label">Row Name</span>
-                      <input type="text" class="input" data-action="row-name" data-row="${rowIndex}" value="${escapeHtml(row.name)}">
-                    </label>
-                  </div>
-                  <div class="flex gap-1 pl-2">
-                    <button class="btn" data-action="row-up" data-row="${rowIndex}">↑</button>
-                    <button class="btn" data-action="row-down" data-row="${rowIndex}">↓</button>
-                    <button class="btn btn-danger" data-action="row-delete" data-row="${rowIndex}">Delete</button>
+              <details class="item-card space-y-2" open>
+                <summary class="section-summary">
+                  <span>Row ${rowIndex + 1}</span>
+                  <span class="summary-caret"></span>
+                </summary>
+                <div class="space-y-2">
+                  <label class="space-y-1">
+                    <span class="label">Row Name</span>
+                    <input type="text" class="input" data-action="row-name" data-row="${rowIndex}" value="${escapeHtml(row.name)}">
+                  </label>
+                  <div class="sidebar-actions">
+                    <button class="btn" data-action="row-up" data-row="${rowIndex}">Move Up</button>
+                    <button class="btn" data-action="row-down" data-row="${rowIndex}">Move Down</button>
+                    <button class="btn btn-danger" data-action="row-delete" data-row="${rowIndex}">Delete Row</button>
                   </div>
                 </div>
                 <div class="space-y-2">
                   ${row.boxes.map((box, boxIndex) => `
-                    <div class="border border-slate-200 rounded-lg p-2 space-y-2">
-                      <div class="flex items-center justify-between">
+                    <div class="border border-slate-200 rounded-lg p-2 space-y-2 bg-white">
+                      <div class="item-card-header">
                         <span class="text-xs font-semibold text-slate-500">Box ${boxIndex + 1}</span>
-                        <div class="flex gap-1">
+                        <div class="flex flex-wrap gap-1">
                           <button class="btn" data-action="box-left" data-row="${rowIndex}" data-box="${boxIndex}">←</button>
                           <button class="btn" data-action="box-right" data-row="${rowIndex}" data-box="${boxIndex}">→</button>
                           <button class="btn" data-action="box-duplicate" data-row="${rowIndex}" data-box="${boxIndex}">Duplicate</button>
                           <button class="btn btn-danger" data-action="box-delete" data-row="${rowIndex}" data-box="${boxIndex}">Delete</button>
                         </div>
                       </div>
-                      <div class="grid grid-cols-2 gap-2">
+                      <div class="sidebar-grid">
                         <label class="space-y-1">
                           <span class="label">Width</span>
                           <input type="number" step="0.1" class="input" data-action="box-width" data-row="${rowIndex}" data-box="${boxIndex}" value="${box.width_value}">
@@ -274,25 +366,25 @@
                           <span class="label">Height</span>
                           <input type="number" step="0.1" class="input" data-action="box-height" data-row="${rowIndex}" data-box="${boxIndex}" value="${box.height_value}">
                         </label>
+                        <label class="space-y-1">
+                          <span class="label">Legend Key</span>
+                          <select class="input" data-action="box-legend" data-row="${rowIndex}" data-box="${boxIndex}">
+                            ${legendOptions}
+                          </select>
+                        </label>
+                        <label class="space-y-1">
+                          <span class="label">Text</span>
+                          <textarea class="input" rows="3" data-action="box-text" data-row="${rowIndex}" data-box="${boxIndex}">${escapeHtml(box.text)}</textarea>
+                        </label>
                       </div>
-                      <label class="space-y-1">
-                        <span class="label">Legend Key</span>
-                        <select class="input" data-action="box-legend" data-row="${rowIndex}" data-box="${boxIndex}">
-                          ${legendOptions}
-                        </select>
-                      </label>
-                      <label class="space-y-1">
-                        <span class="label">Text</span>
-                        <textarea class="input" rows="3" data-action="box-text" data-row="${rowIndex}" data-box="${boxIndex}">${escapeHtml(box.text)}</textarea>
-                      </label>
                     </div>
                   `).join("")}
                 </div>
-                <button class="btn" data-action="box-add" data-row="${rowIndex}">Add Box</button>
-              </div>
+                <button class="btn w-full" data-action="box-add" data-row="${rowIndex}">Add Box</button>
+              </details>
             `).join("")}
           </div>
-        </div>
+        </details>
       `;
 
       document.querySelectorAll("select[data-action='box-legend']").forEach((select) => {
