@@ -120,6 +120,9 @@
       gap: 0.35rem;
       align-items: center;
     }
+    .form-row--double {
+      grid-template-columns: minmax(0, 0.75fr) minmax(0, 1fr) minmax(0, 0.75fr) minmax(0, 1fr);
+    }
     .form-row--start {
       align-items: start;
     }
@@ -307,18 +310,16 @@
                           <textarea class="input" rows="2" data-action="box-text" data-row="${rowIndex}" data-box="${boxIndex}">${escapeHtml(box.text)}</textarea>
                         </div>
                         <div class="form-row">
-                          <span class="label">Text Padding (px)</span>
-                          <input type="number" min="0" step="1" class="input" data-action="box-text-padding" data-row="${rowIndex}" data-box="${boxIndex}" value="${box.textPaddingPx ?? state.settings.textPaddingPx}">
-                        </div>
-                        <div class="form-row">
-                          <span class="label">Text Size (px)</span>
-                          <input type="number" min="1" step="1" class="input" data-action="box-text-size" data-row="${rowIndex}" data-box="${boxIndex}" value="${box.textSizePx ?? state.settings.textSizePx}">
-                        </div>
-                        <div class="form-row">
                           <span class="label">Color</span>
                           <select class="input" data-action="box-legend" data-row="${rowIndex}" data-box="${boxIndex}" style="background-color: ${legendHex}; color: ${legendText};">
                             ${legendOptions}
                           </select>
+                        </div>
+                        <div class="form-row form-row--double">
+                          <span class="label">Text Padding</span>
+                          <input type="number" min="0" step="1" class="input" data-action="box-text-padding" data-row="${rowIndex}" data-box="${boxIndex}" value="${box.textPaddingPx ?? state.settings.textPaddingPx}">
+                          <span class="label">Text Size</span>
+                          <input type="number" min="1" step="1" class="input" data-action="box-text-size" data-row="${rowIndex}" data-box="${boxIndex}" value="${box.textSizePx ?? state.settings.textSizePx}">
                         </div>
                       </div>
                     </div>
@@ -382,7 +383,7 @@
               <input type="number" min="0" step="1" class="input" id="rowGapPx" value="${state.settings.rowGapPx}">
             </div>
             <div class="form-row">
-              <span class="label">Text Padding (px)</span>
+              <span class="label">Text Padding</span>
               <input type="number" min="0" step="1" class="input" id="textPaddingPx" value="${state.settings.textPaddingPx}">
             </div>
             <div class="form-row">
@@ -814,9 +815,12 @@
             <rect x="${xCursor}" y="${y}" width="${widthPx}" height="${heightPx}" rx="0" fill="${fill}" stroke="rgba(0,0,0,0.08)" />
           `);
 
-          const singleLineText = String(box.text ?? "").replace(/\s*\n\s*/g, " ").trim();
-          if (singleLineText && widthPx > 0 && heightPx > 0) {
-            const maxChars = singleLineText.length;
+          const rawText = String(box.text ?? "");
+          const lines = rawText.split(/\r?\n/);
+          const hasText = lines.some((line) => line.length > 0);
+          if (hasText && widthPx > 0 && heightPx > 0) {
+            const maxChars = Math.max(...lines.map((line) => line.length));
+            const lineCount = Math.max(1, lines.length);
             const maxFontSize = Math.max(1, box.textSizePx ?? textSizePx ?? 12);
             let padding = box.textPaddingPx ?? textPaddingPx ?? 0;
             padding = Math.max(0, padding);
@@ -826,19 +830,26 @@
               return;
             }
             let widthLimitedSize = maxChars > 0 ? maxWidth / (maxChars * 0.6) : maxFontSize;
-            let heightLimitedSize = maxHeight / 1.2;
+            let heightLimitedSize = maxHeight / (lineCount * 1.2);
             let fontSize = Math.max(1, Math.min(maxFontSize, widthLimitedSize, heightLimitedSize));
             if (fontSize < maxFontSize && padding > 0) {
               padding = 0;
               maxWidth = widthPx;
               maxHeight = heightPx;
               widthLimitedSize = maxChars > 0 ? maxWidth / (maxChars * 0.6) : maxFontSize;
-              heightLimitedSize = maxHeight / 1.2;
+              heightLimitedSize = maxHeight / (lineCount * 1.2);
               fontSize = Math.max(1, Math.min(maxFontSize, widthLimitedSize, heightLimitedSize));
             }
             const centerX = xCursor + widthPx / 2;
+            const lineHeight = fontSize * 1.2;
+            const totalTextHeight = lineCount * lineHeight;
+            const startY = rowCenterY - totalTextHeight / 2 + lineHeight / 2;
             elements.push(`<text x="${centerX}" y="${rowCenterY}" fill="${textColor}" font-size="${fontSize}" text-anchor="middle" dominant-baseline="middle">`);
-            elements.push(`<tspan x="${centerX}" y="${rowCenterY}">${escapeHtml(singleLineText)}</tspan>`);
+            lines.forEach((line, index) => {
+              const displayLine = line.length ? line : "\u00A0";
+              const y = startY + index * lineHeight;
+              elements.push(`<tspan x="${centerX}" y="${y}">${escapeHtml(displayLine)}</tspan>`);
+            });
             elements.push(`</text>`);
           }
 
