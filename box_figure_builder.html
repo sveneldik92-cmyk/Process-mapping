@@ -188,6 +188,7 @@
         rowGapPx: 24,
         paddingPx: 24,
         textPaddingPx: 5,
+        textSizePx: 12,
         heightFactor: 1,
         canvasWidthPx: 960,
         canvasHeightPx: 420,
@@ -205,12 +206,12 @@
         {
           name: "Row 1",
           boxes: [
-            { width_value: 18, height_value: 2.6, legend_key: "Phase 9", text: "Weeks 5.9\nMMR 5.1" },
-            { width_value: 26, height_value: 1.5, legend_key: "Phase 8", text: "Weeks 5.9\nMMR 9.0" },
-            { width_value: 22, height_value: 1.8, legend_key: "Phase 6", text: "Weeks 3.0\nMMR 9.5" },
-            { width_value: 14, height_value: 2.2, legend_key: "Phase 5", text: "Weeks 9.5\nMMR 8.0" },
-            { width_value: 5, height_value: 2.2, legend_key: "Phase 4", text: "Weeks\n0.1\nMMR 8" },
-            { width_value: 9, height_value: 5.2, legend_key: "Phase 3", text: "Weeks 9.8\nMMR 1.0" }
+            { width_value: 18, height_value: 2.6, legend_key: "Phase 9", text: "Weeks 5.9\nMMR 5.1", textPaddingPx: 5, textSizePx: 12 },
+            { width_value: 26, height_value: 1.5, legend_key: "Phase 8", text: "Weeks 5.9\nMMR 9.0", textPaddingPx: 5, textSizePx: 12 },
+            { width_value: 22, height_value: 1.8, legend_key: "Phase 6", text: "Weeks 3.0\nMMR 9.5", textPaddingPx: 5, textSizePx: 12 },
+            { width_value: 14, height_value: 2.2, legend_key: "Phase 5", text: "Weeks 9.5\nMMR 8.0", textPaddingPx: 5, textSizePx: 12 },
+            { width_value: 5, height_value: 2.2, legend_key: "Phase 4", text: "Weeks\n0.1\nMMR 8", textPaddingPx: 5, textSizePx: 12 },
+            { width_value: 9, height_value: 5.2, legend_key: "Phase 3", text: "Weeks 9.8\nMMR 1.0", textPaddingPx: 5, textSizePx: 12 }
           ]
         }
       ]
@@ -304,6 +305,14 @@
                         <div class="form-row">
                           <span class="label">Text</span>
                           <textarea class="input" rows="2" data-action="box-text" data-row="${rowIndex}" data-box="${boxIndex}">${escapeHtml(box.text)}</textarea>
+                        </div>
+                        <div class="form-row">
+                          <span class="label">Text Padding (px)</span>
+                          <input type="number" min="0" step="1" class="input" data-action="box-text-padding" data-row="${rowIndex}" data-box="${boxIndex}" value="${box.textPaddingPx ?? state.settings.textPaddingPx}">
+                        </div>
+                        <div class="form-row">
+                          <span class="label">Text Size (px)</span>
+                          <input type="number" min="1" step="1" class="input" data-action="box-text-size" data-row="${rowIndex}" data-box="${boxIndex}" value="${box.textSizePx ?? state.settings.textSizePx}">
                         </div>
                         <div class="form-row">
                           <span class="label">Color</span>
@@ -431,6 +440,7 @@
         rowGapPx: "rowGapPx",
         paddingPx: "paddingPx",
         textPaddingPx: "textPaddingPx",
+        textSizePx: "textSizePx",
         heightFactor: "heightFactor",
         canvasWidthPx: "canvasWidthPx",
         canvasHeightPx: "canvasHeightPx",
@@ -585,7 +595,9 @@
             width_value: 10,
             height_value: 3,
             legend_key: legendKey,
-            text: "New Box"
+            text: "",
+            textPaddingPx: state.settings.textPaddingPx,
+            textSizePx: state.settings.textSizePx
           });
           renderAll();
           debounceSave();
@@ -635,9 +647,51 @@
         textarea.addEventListener("input", () => {
           const rowIndex = Number(textarea.dataset.row);
           const boxIndex = Number(textarea.dataset.box);
-          state.rows[rowIndex].boxes[boxIndex].text = textarea.value;
+          const sanitized = textarea.value.replace(/\s*\n\s*/g, " ");
+          textarea.value = sanitized;
+          state.rows[rowIndex].boxes[boxIndex].text = sanitized;
           renderFigure();
           debounceSave();
+        });
+      });
+
+      document.querySelectorAll("[data-action='box-text-padding']").forEach((input) => {
+        input.addEventListener("input", () => {
+          const rowIndex = Number(input.dataset.row);
+          const boxIndex = Number(input.dataset.box);
+          const raw = input.value.trim();
+          if (raw === "") {
+            state.rows[rowIndex].boxes[boxIndex].textPaddingPx = null;
+            renderFigure();
+            debounceSave();
+            return;
+          }
+          const value = Number(raw);
+          if (!Number.isNaN(value)) {
+            state.rows[rowIndex].boxes[boxIndex].textPaddingPx = value;
+            renderFigure();
+            debounceSave();
+          }
+        });
+      });
+
+      document.querySelectorAll("[data-action='box-text-size']").forEach((input) => {
+        input.addEventListener("input", () => {
+          const rowIndex = Number(input.dataset.row);
+          const boxIndex = Number(input.dataset.box);
+          const raw = input.value.trim();
+          if (raw === "") {
+            state.rows[rowIndex].boxes[boxIndex].textSizePx = null;
+            renderFigure();
+            debounceSave();
+            return;
+          }
+          const value = Number(raw);
+          if (!Number.isNaN(value)) {
+            state.rows[rowIndex].boxes[boxIndex].textSizePx = value;
+            renderFigure();
+            debounceSave();
+          }
         });
       });
 
@@ -706,6 +760,7 @@
         rowGapPx,
         paddingPx,
         textPaddingPx,
+        textSizePx,
         heightFactor,
         heightScalePxPerUnit
       } = state.settings;
@@ -759,36 +814,31 @@
             <rect x="${xCursor}" y="${y}" width="${widthPx}" height="${heightPx}" rx="0" fill="${fill}" stroke="rgba(0,0,0,0.08)" />
           `);
 
-          if (box.text && widthPx > 0 && heightPx > 0) {
-            const lines = box.text.split("\n");
-            const maxChars = Math.max(...lines.map((line) => line.length), 0);
-            const maxFontSize = 16;
-            const minReadableSize = 8;
-            let padding = Math.max(0, textPaddingPx);
+          const singleLineText = String(box.text ?? "").replace(/\s*\n\s*/g, " ").trim();
+          if (singleLineText && widthPx > 0 && heightPx > 0) {
+            const maxChars = singleLineText.length;
+            const maxFontSize = Math.max(1, box.textSizePx ?? textSizePx ?? 12);
+            let padding = box.textPaddingPx ?? textPaddingPx ?? 0;
+            padding = Math.max(0, padding);
             let maxWidth = widthPx - padding * 2;
             let maxHeight = heightPx - padding * 2;
             if (maxWidth <= 0 || maxHeight <= 0) {
               return;
             }
             let widthLimitedSize = maxChars > 0 ? maxWidth / (maxChars * 0.6) : maxFontSize;
-            let heightLimitedSize = lines.length > 0 ? maxHeight / (lines.length * 1.2) : maxFontSize;
+            let heightLimitedSize = maxHeight / 1.2;
             let fontSize = Math.max(1, Math.min(maxFontSize, widthLimitedSize, heightLimitedSize));
-            if (fontSize < minReadableSize && padding > 0) {
+            if (fontSize < maxFontSize && padding > 0) {
               padding = 0;
               maxWidth = widthPx;
               maxHeight = heightPx;
               widthLimitedSize = maxChars > 0 ? maxWidth / (maxChars * 0.6) : maxFontSize;
-              heightLimitedSize = lines.length > 0 ? maxHeight / (lines.length * 1.2) : maxFontSize;
+              heightLimitedSize = maxHeight / 1.2;
               fontSize = Math.max(1, Math.min(maxFontSize, widthLimitedSize, heightLimitedSize));
             }
-            const lineHeight = fontSize * 1.2;
-            const startY = rowCenterY - ((lines.length - 1) * lineHeight) / 2;
             const centerX = xCursor + widthPx / 2;
-            elements.push(`<text x="${centerX}" y="${startY}" fill="${textColor}" font-size="${fontSize}" text-anchor="middle" dominant-baseline="middle">`);
-            lines.forEach((line, index) => {
-              const yLine = startY + index * lineHeight;
-              elements.push(`<tspan x="${centerX}" y="${yLine}">${escapeHtml(line)}</tspan>`);
-            });
+            elements.push(`<text x="${centerX}" y="${rowCenterY}" fill="${textColor}" font-size="${fontSize}" text-anchor="middle" dominant-baseline="middle">`);
+            elements.push(`<tspan x="${centerX}" y="${rowCenterY}">${escapeHtml(singleLineText)}</tspan>`);
             elements.push(`</text>`);
           }
 
@@ -879,6 +929,7 @@
       lines.push(`# rowGapPx=${settings.rowGapPx}`);
       lines.push(`# paddingPx=${settings.paddingPx}`);
       lines.push(`# textPaddingPx=${settings.textPaddingPx}`);
+      lines.push(`# textSizePx=${settings.textSizePx}`);
       lines.push(`# canvasWidthPx=${settings.canvasWidthPx}`);
       lines.push(`# canvasHeightPx=${settings.canvasHeightPx}`);
       lines.push(`# heightFactor=${settings.heightFactor}`);
