@@ -163,7 +163,7 @@
       </div>
       <div class="border border-slate-200 rounded-lg bg-white shadow-sm">
         <div class="p-3 border-b border-slate-200 text-sm text-slate-600">SVG Canvas (scrolls vertically if needed)</div>
-        <div id="canvasContainer" class="overflow-y-auto" style="height: 420px;">
+        <div id="canvasContainer" class="overflow-auto" style="height: 420px;">
           <svg id="figureSvg" width="100%" height="420" xmlns="http://www.w3.org/2000/svg"></svg>
         </div>
       </div>
@@ -174,13 +174,12 @@
     const STORAGE_KEY = "box_figure_builder_state";
 
     const defaultPalette = [
-      "#2b5fb8",
+      "#2f5eb5",
       "#4aa3df",
-      "#6cc3ab",
-      "#f6c244",
-      "#e8874a",
-      "#c44f4f",
-      "#8e63b5"
+      "#45b3d6",
+      "#8a6ac4",
+      "#c25a91",
+      "#7b5bb3"
     ];
 
     const defaultState = {
@@ -191,25 +190,28 @@
         conversionEnabled: false,
         widthFactor: 1,
         heightFactor: 1,
+        canvasWidthPx: 960,
         canvasHeightPx: 420,
         heightScalePxPerUnit: 12
       },
       legendItems: [
-        { key: "Phase 9", label: "Phase 9", colorHex: "#2b5fb8" },
+        { key: "Phase 9", label: "Phase 9", colorHex: "#2f5eb5" },
         { key: "Phase 8", label: "Phase 8", colorHex: "#4aa3df" },
-        { key: "Phase 6", label: "Phase 6", colorHex: "#6cc3ab" },
-        { key: "Phase 5", label: "Phase 5", colorHex: "#f6c244" },
-        { key: "Phase 4", label: "Phase 4", colorHex: "#e8874a" }
+        { key: "Phase 6", label: "Phase 6", colorHex: "#45b3d6" },
+        { key: "Phase 5", label: "Phase 5", colorHex: "#8a6ac4" },
+        { key: "Phase 4", label: "Phase 4", colorHex: "#c25a91" },
+        { key: "Phase 3", label: "Phase 3", colorHex: "#7b5bb3" }
       ],
       rows: [
         {
           name: "Row 1",
           boxes: [
-            { width_value: 18, height_value: 2, legend_key: "Phase 9", text: "Phase 9" },
-            { width_value: 26, height_value: 3, legend_key: "Phase 8", text: "Phase 8\nHigher" },
-            { width_value: 22, height_value: 4, legend_key: "Phase 6", text: "Phase 6" },
-            { width_value: 16, height_value: 5, legend_key: "Phase 5", text: "Phase 5\nTall" },
-            { width_value: 10, height_value: 3, legend_key: "Phase 4", text: "Phase 4" }
+            { width_value: 18, height_value: 2.6, legend_key: "Phase 9", text: "Weeks 5.9\nMMR 5.1" },
+            { width_value: 26, height_value: 1.5, legend_key: "Phase 8", text: "Weeks 5.9\nMMR 9.0" },
+            { width_value: 22, height_value: 1.8, legend_key: "Phase 6", text: "Weeks 3.0\nMMR 9.5" },
+            { width_value: 14, height_value: 2.2, legend_key: "Phase 5", text: "Weeks 9.5\nMMR 8.0" },
+            { width_value: 5, height_value: 2.2, legend_key: "Phase 4", text: "Weeks\n0.1\nMMR 8" },
+            { width_value: 9, height_value: 5.2, legend_key: "Phase 3", text: "Weeks 9.8\nMMR 1.0" }
           ]
         }
       ]
@@ -364,6 +366,10 @@
               <input type="number" min="0" step="1" class="input" id="spacingPx" value="${state.settings.spacingPx}">
             </div>
             <div class="form-row">
+              <span class="label">Canvas Width (px)</span>
+              <input type="number" min="200" step="10" class="input" id="canvasWidthPx" value="${state.settings.canvasWidthPx}">
+            </div>
+            <div class="form-row">
               <span class="label">Row Gap (px)</span>
               <input type="number" min="0" step="1" class="input" id="rowGapPx" value="${state.settings.rowGapPx}">
             </div>
@@ -433,6 +439,7 @@
         paddingPx: "paddingPx",
         widthFactor: "widthFactor",
         heightFactor: "heightFactor",
+        canvasWidthPx: "canvasWidthPx",
         canvasHeightPx: "canvasHeightPx",
         heightScalePxPerUnit: "heightScalePxPerUnit"
       };
@@ -718,7 +725,9 @@
     function renderFigure() {
       const svg = document.getElementById("figureSvg");
       const container = document.getElementById("canvasContainer");
-      const width = container.clientWidth || 800;
+      const width = Number.isFinite(state.settings.canvasWidthPx) && state.settings.canvasWidthPx > 0
+        ? state.settings.canvasWidthPx
+        : container.clientWidth || 800;
       const {
         spacingPx,
         rowGapPx,
@@ -774,18 +783,26 @@
           const fill = legendColor(box.legend_key);
           const textColor = autoTextColor(fill);
           const y = rowCenterY - heightPx / 2;
-          const rx = Math.min(10, heightPx / 4);
-
           elements.push(`
-            <rect x="${xCursor}" y="${y}" width="${widthPx}" height="${heightPx}" rx="${rx}" fill="${fill}" stroke="rgba(0,0,0,0.08)" />
+            <rect x="${xCursor}" y="${y}" width="${widthPx}" height="${heightPx}" rx="0" fill="${fill}" stroke="rgba(0,0,0,0.08)" />
           `);
 
           if (box.text && widthPx > 0 && heightPx > 0) {
             const lines = box.text.split("\n");
-            const lineHeight = 14;
+            const maxChars = Math.max(...lines.map((line) => line.length), 0);
+            const padding = 6;
+            const maxWidth = widthPx - padding * 2;
+            const maxHeight = heightPx - padding * 2;
+            if (maxWidth <= 0 || maxHeight <= 0) {
+              return;
+            }
+            const widthLimitedSize = maxChars > 0 ? maxWidth / (maxChars * 0.6) : 12;
+            const heightLimitedSize = lines.length > 0 ? maxHeight / (lines.length * 1.2) : 12;
+            const fontSize = Math.max(1, Math.min(12, widthLimitedSize, heightLimitedSize));
+            const lineHeight = fontSize * 1.2;
             const startY = rowCenterY - ((lines.length - 1) * lineHeight) / 2;
             const centerX = xCursor + widthPx / 2;
-            elements.push(`<text x="${centerX}" y="${startY}" fill="${textColor}" font-size="12" text-anchor="middle">`);
+            elements.push(`<text x="${centerX}" y="${startY}" fill="${textColor}" font-size="${fontSize}" text-anchor="middle">`);
             lines.forEach((line, index) => {
               const yLine = startY + index * lineHeight;
               elements.push(`<tspan x="${centerX}" y="${yLine}">${escapeHtml(line)}</tspan>`);
@@ -879,6 +896,7 @@
       lines.push(`# spacingPx=${settings.spacingPx}`);
       lines.push(`# rowGapPx=${settings.rowGapPx}`);
       lines.push(`# paddingPx=${settings.paddingPx}`);
+      lines.push(`# canvasWidthPx=${settings.canvasWidthPx}`);
       lines.push(`# canvasHeightPx=${settings.canvasHeightPx}`);
       lines.push(`# conversionEnabled=${settings.conversionEnabled}`);
       lines.push(`# widthFactor=${settings.widthFactor}`);
