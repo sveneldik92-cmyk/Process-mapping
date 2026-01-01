@@ -187,8 +187,7 @@
         spacingPx: 14,
         rowGapPx: 24,
         paddingPx: 24,
-        conversionEnabled: false,
-        widthFactor: 1,
+        textPaddingPx: 5,
         heightFactor: 1,
         canvasWidthPx: 960,
         canvasHeightPx: 420,
@@ -374,16 +373,12 @@
               <input type="number" min="0" step="1" class="input" id="rowGapPx" value="${state.settings.rowGapPx}">
             </div>
             <div class="form-row">
-              <span class="label">Width Factor</span>
-              <input type="number" step="0.1" class="input" id="widthFactor" value="${state.settings.widthFactor}">
+              <span class="label">Text Padding (px)</span>
+              <input type="number" min="0" step="1" class="input" id="textPaddingPx" value="${state.settings.textPaddingPx}">
             </div>
             <div class="form-row">
               <span class="label">Height Factor</span>
               <input type="number" step="0.1" class="input" id="heightFactor" value="${state.settings.heightFactor}">
-            </div>
-            <div class="form-row">
-              <span class="label">Use conversion factor</span>
-              <input type="checkbox" id="conversionEnabled" class="h-4 w-4" ${state.settings.conversionEnabled ? "checked" : ""}>
             </div>
           </div>
           <div class="button-row pt-2">
@@ -407,15 +402,13 @@
           </div>
           <div class="space-y-2">
             <span class="label">Import CSV</span>
+            <p class="text-[0.7rem] text-slate-500 leading-snug">
+              CSV header required: <code class="font-mono">row,box,width,height,legend,text</code>. Rows/boxes are 1-based.
+              Optional metadata lines can appear above the header (start with <code class="font-mono">#</code>) for settings and legend entries.
+            </p>
             <input type="file" accept=".csv,text/csv" class="text-xs" id="importCsvFile">
             <textarea class="input" id="pasteCsv" rows="2" placeholder="Paste CSV here..."></textarea>
             <button class="btn w-full" id="importCsvBtn">Import CSV</button>
-          </div>
-          <div class="space-y-2">
-            <span class="label">Import JSON</span>
-            <input type="file" accept="application/json,.json" class="text-xs" id="importJsonFile">
-            <textarea class="input" id="pasteJson" rows="2" placeholder="Paste JSON here..."></textarea>
-            <button class="btn w-full" id="importJsonBtn">Import JSON</button>
           </div>
         </details>
       `;
@@ -437,7 +430,7 @@
         spacingPx: "spacingPx",
         rowGapPx: "rowGapPx",
         paddingPx: "paddingPx",
-        widthFactor: "widthFactor",
+        textPaddingPx: "textPaddingPx",
         heightFactor: "heightFactor",
         canvasWidthPx: "canvasWidthPx",
         canvasHeightPx: "canvasHeightPx",
@@ -458,15 +451,6 @@
           }
         });
       });
-
-      const conversionToggle = document.getElementById("conversionEnabled");
-      if (conversionToggle) {
-        conversionToggle.addEventListener("change", (event) => {
-          state.settings.conversionEnabled = event.target.checked;
-          renderFigure();
-          debounceSave();
-        });
-      }
 
       document.getElementById("addRowBtn").addEventListener("click", () => {
         state.rows.push({ name: `Row ${state.rows.length + 1}`, boxes: [] });
@@ -494,17 +478,6 @@
         const file = event.target.files[0];
         if (!file) return;
         file.text().then((text) => importCsv(text));
-      });
-
-      document.getElementById("importJsonBtn").addEventListener("click", () => {
-        const text = document.getElementById("pasteJson").value.trim();
-        if (text) importJson(text);
-      });
-
-      document.getElementById("importJsonFile").addEventListener("change", (event) => {
-        const file = event.target.files[0];
-        if (!file) return;
-        file.text().then((text) => importJson(text));
       });
 
       document.getElementById("addLegendBtn").addEventListener("click", () => {
@@ -732,16 +705,15 @@
         spacingPx,
         rowGapPx,
         paddingPx,
-        conversionEnabled,
-        widthFactor,
+        textPaddingPx,
         heightFactor,
         heightScalePxPerUnit
       } = state.settings;
 
       const rows = state.rows.map((row) => {
         const boxes = row.boxes.map((box) => {
-          const widthUnits = conversionEnabled ? box.width_value * widthFactor : box.width_value;
-          const heightUnits = conversionEnabled ? box.height_value * heightFactor : box.height_value;
+          const widthUnits = box.width_value;
+          const heightUnits = box.height_value * heightFactor;
           return {
             ...box,
             widthUnits: Number.isFinite(widthUnits) ? widthUnits : 0,
@@ -790,19 +762,29 @@
           if (box.text && widthPx > 0 && heightPx > 0) {
             const lines = box.text.split("\n");
             const maxChars = Math.max(...lines.map((line) => line.length), 0);
-            const padding = 6;
-            const maxWidth = widthPx - padding * 2;
-            const maxHeight = heightPx - padding * 2;
+            const maxFontSize = 16;
+            const minReadableSize = 8;
+            let padding = Math.max(0, textPaddingPx);
+            let maxWidth = widthPx - padding * 2;
+            let maxHeight = heightPx - padding * 2;
             if (maxWidth <= 0 || maxHeight <= 0) {
               return;
             }
-            const widthLimitedSize = maxChars > 0 ? maxWidth / (maxChars * 0.6) : 12;
-            const heightLimitedSize = lines.length > 0 ? maxHeight / (lines.length * 1.2) : 12;
-            const fontSize = Math.max(1, Math.min(12, widthLimitedSize, heightLimitedSize));
+            let widthLimitedSize = maxChars > 0 ? maxWidth / (maxChars * 0.6) : maxFontSize;
+            let heightLimitedSize = lines.length > 0 ? maxHeight / (lines.length * 1.2) : maxFontSize;
+            let fontSize = Math.max(1, Math.min(maxFontSize, widthLimitedSize, heightLimitedSize));
+            if (fontSize < minReadableSize && padding > 0) {
+              padding = 0;
+              maxWidth = widthPx;
+              maxHeight = heightPx;
+              widthLimitedSize = maxChars > 0 ? maxWidth / (maxChars * 0.6) : maxFontSize;
+              heightLimitedSize = lines.length > 0 ? maxHeight / (lines.length * 1.2) : maxFontSize;
+              fontSize = Math.max(1, Math.min(maxFontSize, widthLimitedSize, heightLimitedSize));
+            }
             const lineHeight = fontSize * 1.2;
             const startY = rowCenterY - ((lines.length - 1) * lineHeight) / 2;
             const centerX = xCursor + widthPx / 2;
-            elements.push(`<text x="${centerX}" y="${startY}" fill="${textColor}" font-size="${fontSize}" text-anchor="middle">`);
+            elements.push(`<text x="${centerX}" y="${startY}" fill="${textColor}" font-size="${fontSize}" text-anchor="middle" dominant-baseline="middle">`);
             lines.forEach((line, index) => {
               const yLine = startY + index * lineHeight;
               elements.push(`<tspan x="${centerX}" y="${yLine}">${escapeHtml(line)}</tspan>`);
@@ -896,10 +878,9 @@
       lines.push(`# spacingPx=${settings.spacingPx}`);
       lines.push(`# rowGapPx=${settings.rowGapPx}`);
       lines.push(`# paddingPx=${settings.paddingPx}`);
+      lines.push(`# textPaddingPx=${settings.textPaddingPx}`);
       lines.push(`# canvasWidthPx=${settings.canvasWidthPx}`);
       lines.push(`# canvasHeightPx=${settings.canvasHeightPx}`);
-      lines.push(`# conversionEnabled=${settings.conversionEnabled}`);
-      lines.push(`# widthFactor=${settings.widthFactor}`);
       lines.push(`# heightFactor=${settings.heightFactor}`);
       lines.push(`# heightScalePxPerUnit=${settings.heightScalePxPerUnit}`);
       state.legendItems.forEach((item) => {
@@ -945,12 +926,8 @@
           const [key, value] = trimmed.split("=");
           if (!key || value === undefined) return;
           if (key in newState.settings) {
-            if (key === "conversionEnabled") {
-              newState.settings[key] = value.trim() === "true";
-            } else {
-              const num = Number(value.trim());
-              if (!Number.isNaN(num)) newState.settings[key] = num;
-            }
+            const num = Number(value.trim());
+            if (!Number.isNaN(num)) newState.settings[key] = num;
           }
         }
       });
@@ -1076,21 +1053,6 @@
     function exportJson() {
       const data = JSON.stringify(state, null, 2);
       downloadFile(data, "box_figure.json", "application/json");
-    }
-
-    function importJson(text) {
-      try {
-        const parsed = JSON.parse(text);
-        if (parsed && parsed.settings && parsed.rows && parsed.legendItems) {
-          state = parsed;
-          state.rows.forEach((row) => row.boxes.forEach((box) => ensureLegendKey(box)));
-          applyCanvasHeight();
-          renderAll();
-          debounceSave();
-        }
-      } catch {
-        alert("Invalid JSON file.");
-      }
     }
 
     function exportSvg() {
