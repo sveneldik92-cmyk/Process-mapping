@@ -205,7 +205,8 @@
         spacingPx: 14,
         rowGapPx: 24,
         paddingPx: 24,
-        textSizePx: 12,
+        textSizePx: 11,
+        legendTextSizePx: 12,
         heightFactor: 1,
         canvasWidthPx: 960,
         canvasHeightPx: 420,
@@ -223,12 +224,12 @@
         {
           name: "Row 1",
           boxes: [
-            { width_value: 18, height_value: 2.6, legend_key: "Phase 9", text: "Weeks 5.9\nMMR 5.1", textSizePx: 12 },
-            { width_value: 26, height_value: 1.5, legend_key: "Phase 8", text: "Weeks 5.9\nMMR 9.0", textSizePx: 12 },
-            { width_value: 22, height_value: 1.8, legend_key: "Phase 6", text: "Weeks 3.0\nMMR 9.5", textSizePx: 12 },
-            { width_value: 14, height_value: 2.2, legend_key: "Phase 5", text: "Weeks 9.5\nMMR 8.0", textSizePx: 12 },
-            { width_value: 5, height_value: 2.2, legend_key: "Phase 4", text: "Weeks\n0.1\nMMR 8", textSizePx: 12 },
-            { width_value: 9, height_value: 5.2, legend_key: "Phase 3", text: "Weeks 9.8\nMMR 1.0", textSizePx: 12 }
+            { width_value: 18, height_value: 2.6, legend_key: "Phase 9", text: "Weeks 5.9\nMMR 5.1", textSizePx: 11 },
+            { width_value: 26, height_value: 1.5, legend_key: "Phase 8", text: "Weeks 5.9\nMMR 9.0", textSizePx: 11 },
+            { width_value: 22, height_value: 1.8, legend_key: "Phase 6", text: "Weeks 3.0\nMMR 9.5", textSizePx: 11 },
+            { width_value: 14, height_value: 2.2, legend_key: "Phase 5", text: "Weeks 9.5\nMMR 8.0", textSizePx: 11 },
+            { width_value: 5, height_value: 2.2, legend_key: "Phase 4", text: "Weeks\n0.1\nMMR 8", textSizePx: 11 },
+            { width_value: 9, height_value: 5.2, legend_key: "Phase 3", text: "Weeks 9.8\nMMR 1.0", textSizePx: 11 }
           ]
         }
       ]
@@ -254,8 +255,8 @@
       }
     }
 
-    function ensureLegendKey(box) {
-      const keys = state.legendItems.map((item) => item.key);
+    function ensureLegendKey(box, legendItems = state.legendItems) {
+      const keys = legendItems.map((item) => item.key);
       if (!keys.includes(box.legend_key)) {
         box.legend_key = keys[0] || "";
       }
@@ -281,7 +282,7 @@
             ${state.rows.map((row, rowIndex) => `
               <details class="item-card space-y-2" open>
                 <summary class="section-summary">
-                  <span>Row ${rowIndex + 1}</span>
+                  <span>${escapeHtml(row.name || `Row ${rowIndex + 1}`)}</span>
                   <span class="summary-caret"></span>
                 </summary>
                 <div class="space-y-2">
@@ -399,6 +400,10 @@
               <input type="number" min="0" step="1" class="input" id="rowGapPx" value="${state.settings.rowGapPx}">
             </div>
             <div class="form-row">
+              <span class="label">Legend Text Size (px)</span>
+              <input type="number" min="1" step="1" class="input" id="legendTextSizePx" value="${state.settings.legendTextSizePx ?? 12}">
+            </div>
+            <div class="form-row">
               <span class="label">Height Factor</span>
               <input type="number" step="0.1" class="input" id="heightFactor" value="${state.settings.heightFactor}">
             </div>
@@ -454,6 +459,7 @@
         rowGapPx: "rowGapPx",
         paddingPx: "paddingPx",
         textSizePx: "textSizePx",
+        legendTextSizePx: "legendTextSizePx",
         heightFactor: "heightFactor",
         canvasWidthPx: "canvasWidthPx",
         canvasHeightPx: "canvasHeightPx",
@@ -660,9 +666,7 @@
         textarea.addEventListener("input", () => {
           const rowIndex = Number(textarea.dataset.row);
           const boxIndex = Number(textarea.dataset.box);
-          const sanitized = textarea.value.replace(/\s*\n\s*/g, " ");
-          textarea.value = sanitized;
-          state.rows[rowIndex].boxes[boxIndex].text = sanitized;
+          state.rows[rowIndex].boxes[boxIndex].text = textarea.value;
           renderFigure();
           debounceSave();
         });
@@ -694,7 +698,7 @@
           const boxIndex = Number(btn.dataset.box);
           const step = Number(btn.dataset.step || 0);
           const box = state.rows[rowIndex].boxes[boxIndex];
-          const current = box.textSizePx ?? state.settings.textSizePx ?? 12;
+          const current = box.textSizePx ?? state.settings.textSizePx ?? 11;
           const nextValue = Math.max(1, current + step);
           box.textSizePx = nextValue;
           const input = document.querySelector(
@@ -832,7 +836,7 @@
           if (hasText && widthPx > 0 && heightPx > 0) {
             const maxChars = Math.max(...lines.map((line) => line.length));
             const lineCount = Math.max(1, lines.length);
-            const maxFontSize = Math.max(1, box.textSizePx ?? textSizePx ?? 12);
+            const maxFontSize = Math.max(1, box.textSizePx ?? textSizePx ?? 11);
             const widthLimitedSize = maxChars > 0 ? widthPx / (maxChars * 0.6) : maxFontSize;
             const heightLimitedSize = heightPx / (lineCount * 1.2);
             fontSize = Math.max(1, Math.min(maxFontSize, widthLimitedSize, heightLimitedSize));
@@ -898,7 +902,7 @@
           `<rect x="${item.x}" y="${item.y}" width="${item.rectSize}" height="${item.rectSize}" rx="4" fill="${item.colorHex}" stroke="rgba(0,0,0,0.1)" />`
         );
         elements.push(
-          `<text x="${item.x + item.rectSize + 6}" y="${item.y + item.rectSize * 0.7}" fill="#1f2933" font-size="12">${escapeHtml(item.label)}</text>`
+          `<text x="${item.x + item.rectSize + 6}" y="${item.y + item.labelOffsetY}" fill="#1f2933" font-size="${item.fontSize}">${escapeHtml(item.label)}</text>`
         );
       });
 
@@ -922,11 +926,13 @@
       let x = paddingPx;
       let y = startY;
       const maxX = width - paddingPx;
+      const fontSize = Math.max(1, state.settings.legendTextSizePx ?? 12);
+      const labelOffsetY = rectSize * 0.7 + (fontSize - 12) * 0.35;
       const items = [];
 
       state.legendItems.forEach((item) => {
         const label = item.label || item.key;
-        const textWidth = Math.max(20, label.length * 7);
+        const textWidth = Math.max(20, label.length * fontSize * 0.6);
         const itemWidth = rectSize + 6 + textWidth + 12;
 
         if (x + itemWidth > maxX) {
@@ -939,6 +945,8 @@
           y,
           rectSize,
           textWidth,
+          fontSize,
+          labelOffsetY,
           label,
           colorHex: item.colorHex
         });
@@ -992,6 +1000,7 @@
       lines.push(`# rowGapPx=${settings.rowGapPx}`);
       lines.push(`# paddingPx=${settings.paddingPx}`);
       lines.push(`# textSizePx=${settings.textSizePx}`);
+      lines.push(`# legendTextSizePx=${settings.legendTextSizePx}`);
       lines.push(`# canvasWidthPx=${settings.canvasWidthPx}`);
       lines.push(`# canvasHeightPx=${settings.canvasHeightPx}`);
       lines.push(`# heightFactor=${settings.heightFactor}`);
@@ -1093,7 +1102,7 @@
         }));
       }
 
-      newState.rows.forEach((row) => row.boxes.forEach((box) => ensureLegendKey(box)));
+      newState.rows.forEach((row) => row.boxes.forEach((box) => ensureLegendKey(box, newState.legendItems)));
       state = newState;
       applyCanvasHeight();
       renderAll();
@@ -1230,7 +1239,7 @@
           line: { color: "E2E8F0", width: 0.5 }
         });
         if (box.hasText && box.text.trim()) {
-          const fontSize = Math.max(1, (box.fontSize ?? state.settings.textSizePx ?? 12) * scale * 72);
+          const fontSize = Math.max(1, (box.fontSize ?? state.settings.textSizePx ?? 11) * scale * 72);
           slide.addText(box.text, {
             x,
             y,
@@ -1266,7 +1275,7 @@
           w: Math.max(0.1, item.textWidth * scale),
           h: rectSize,
           fontFace: "Segoe UI",
-          fontSize: Math.max(1, 12 * scale * 72),
+          fontSize: Math.max(1, (state.settings.legendTextSizePx ?? 12) * scale * 72),
           color: "1F2933",
           valign: "middle"
         });
