@@ -127,6 +127,20 @@
     .form-row--start {
       align-items: start;
     }
+    .text-size-control {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      gap: 0.3rem;
+      align-items: center;
+    }
+    .text-size-btn {
+      height: 1.4rem;
+      padding: 0.1rem 0.4rem;
+      line-height: 1;
+    }
+    .text-size-input {
+      text-align: center;
+    }
     .button-row {
       display: flex;
       flex-wrap: nowrap;
@@ -315,9 +329,13 @@
                             ${legendOptions}
                           </select>
                         </div>
-                        <div class="form-row form-row--double">
+                        <div class="form-row">
                           <span class="label">Text Size</span>
-                          <input type="number" min="1" step="1" class="input" data-action="box-text-size" data-row="${rowIndex}" data-box="${boxIndex}" value="${box.textSizePx ?? state.settings.textSizePx}">
+                          <div class="text-size-control">
+                            <button class="btn text-size-btn" data-action="box-text-size-step" data-step="-1" data-row="${rowIndex}" data-box="${boxIndex}">−</button>
+                            <input type="number" min="1" step="1" class="input text-size-input" data-action="box-text-size" data-row="${rowIndex}" data-box="${boxIndex}" value="${box.textSizePx ?? state.settings.textSizePx}">
+                            <button class="btn text-size-btn" data-action="box-text-size-step" data-step="1" data-row="${rowIndex}" data-box="${boxIndex}">+</button>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -670,6 +688,26 @@
         });
       });
 
+      document.querySelectorAll("[data-action='box-text-size-step']").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const rowIndex = Number(btn.dataset.row);
+          const boxIndex = Number(btn.dataset.box);
+          const step = Number(btn.dataset.step || 0);
+          const box = state.rows[rowIndex].boxes[boxIndex];
+          const current = box.textSizePx ?? state.settings.textSizePx ?? 12;
+          const nextValue = Math.max(1, current + step);
+          box.textSizePx = nextValue;
+          const input = document.querySelector(
+            `[data-action="box-text-size"][data-row="${rowIndex}"][data-box="${boxIndex}"]`
+          );
+          if (input) {
+            input.value = nextValue;
+          }
+          renderFigure();
+          debounceSave();
+        });
+      });
+
       document.querySelectorAll("[data-action='box-left']").forEach((btn) => {
         btn.addEventListener("click", () => {
           const rowIndex = Number(btn.dataset.row);
@@ -855,7 +893,14 @@
 
       const legendStartY = layout.rowEndY + 18;
       const legendLayout = layoutLegend(layout.width, layout.paddingPx, legendStartY);
-      elements.push(...legendLayout.elements);
+      legendLayout.items.forEach((item) => {
+        elements.push(
+          `<rect x="${item.x}" y="${item.y}" width="${item.rectSize}" height="${item.rectSize}" rx="4" fill="${item.colorHex}" stroke="rgba(0,0,0,0.1)" />`
+        );
+        elements.push(
+          `<text x="${item.x + item.rectSize + 6}" y="${item.y + item.rectSize * 0.7}" fill="#1f2933" font-size="12">${escapeHtml(item.label)}</text>`
+        );
+      });
 
       const contentHeight = Math.max(state.settings.canvasHeightPx, legendLayout.bottom + layout.paddingPx);
       elements.unshift(`<rect x="0" y="0" width="${layout.width}" height="${contentHeight}" fill="#f7f7f5"></rect>`);
@@ -877,7 +922,7 @@
       let x = paddingPx;
       let y = startY;
       const maxX = width - paddingPx;
-      const elements = [];
+      const items = [];
 
       state.legendItems.forEach((item) => {
         const label = item.label || item.key;
@@ -889,13 +934,19 @@
           y += rectSize + rowGap;
         }
 
-        elements.push(`<rect x="${x}" y="${y}" width="${rectSize}" height="${rectSize}" rx="4" fill="${item.colorHex}" stroke="rgba(0,0,0,0.1)" />`);
-        elements.push(`<text x="${x + rectSize + 6}" y="${y + rectSize * 0.7}" fill="#1f2933" font-size="12">${escapeHtml(label)}</text>`);
+        items.push({
+          x,
+          y,
+          rectSize,
+          textWidth,
+          label,
+          colorHex: item.colorHex
+        });
 
         x += itemWidth + gap;
       });
 
-      return { elements, bottom: y + rectSize };
+      return { items, bottom: y + rectSize };
     }
 
     function legendColor(key) {
@@ -1179,7 +1230,7 @@
           line: { color: "E2E8F0", width: 0.5 }
         });
         if (box.hasText && box.text.trim()) {
-          const fontSize = Math.max(1, (box.fontSize ?? 12) * scale * 0.75);
+          const fontSize = Math.max(1, (box.fontSize ?? state.settings.textSizePx ?? 12) * scale * 72);
           slide.addText(box.text, {
             x,
             y,
@@ -1192,6 +1243,33 @@
             valign: "middle"
           });
         }
+      });
+
+      const legendStartY = layout.rowEndY + 18;
+      const legendLayout = layoutLegend(layout.width, layout.paddingPx, legendStartY);
+      legendLayout.items.forEach((item) => {
+        const x = marginIn + item.x * scale;
+        const y = marginIn + item.y * scale;
+        const rectSize = item.rectSize * scale;
+        slide.addShape(pptx.ShapeType.rect, {
+          x,
+          y,
+          w: rectSize,
+          h: rectSize,
+          fill: { color: colorToPptx(item.colorHex) },
+          line: { color: "E2E8F0", width: 0.5 },
+          radius: 2
+        });
+        slide.addText(item.label, {
+          x: marginIn + (item.x + item.rectSize + 6) * scale,
+          y,
+          w: Math.max(0.1, item.textWidth * scale),
+          h: rectSize,
+          fontFace: "Segoe UI",
+          fontSize: Math.max(1, 12 * scale * 72),
+          color: "1F2933",
+          valign: "middle"
+        });
       });
 
       pptx.writeFile({ fileName: "box_figure.pptx" });
