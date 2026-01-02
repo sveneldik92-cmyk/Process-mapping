@@ -899,7 +899,7 @@
       const legendLayout = layoutLegend(layout.width, layout.paddingPx, legendStartY);
       legendLayout.items.forEach((item) => {
         elements.push(
-          `<rect x="${item.x}" y="${item.y}" width="${item.rectSize}" height="${item.rectSize}" rx="4" fill="${item.colorHex}" stroke="rgba(0,0,0,0.1)" />`
+          `<rect x="${item.x}" y="${item.y}" width="${item.rectWidth}" height="${item.rectHeight}" rx="3" fill="${item.colorHex}" stroke="rgba(0,0,0,0.08)" />`
         );
         elements.push(
           `<text x="${item.x + item.rectSize + 6}" y="${item.y + item.labelOffsetY}" fill="#1f2933" font-size="${item.fontSize}">${escapeHtml(item.label)}</text>`
@@ -920,9 +920,11 @@
     }
 
     function layoutLegend(width, paddingPx, startY) {
-      const rectSize = 18;
-      const gap = 10;
-      const rowGap = 10;
+      const rectHeight = 14;
+      const gap = 8;
+      const rowGap = 8;
+      const fontSize = 11;
+      const textPaddingX = 10;
       let x = paddingPx;
       let y = startY;
       const maxX = width - paddingPx;
@@ -935,9 +937,9 @@
         const textWidth = Math.max(20, label.length * fontSize * 0.6);
         const itemWidth = rectSize + 6 + textWidth + 12;
 
-        if (x + itemWidth > maxX) {
+        if (x + rectWidth > maxX) {
           x = paddingPx;
-          y += rectSize + rowGap;
+          y += rectHeight + rowGap;
         }
 
         items.push({
@@ -948,13 +950,15 @@
           fontSize,
           labelOffsetY,
           label,
-          colorHex: item.colorHex
+          colorHex: item.colorHex,
+          textColor: autoTextColor(item.colorHex),
+          fontSize
         });
 
-        x += itemWidth + gap;
+        x += rectWidth + gap;
       });
 
-      return { items, bottom: y + rectSize };
+      return { items, bottom: y + rectHeight };
     }
 
     function legendColor(key) {
@@ -1259,21 +1263,22 @@
       legendLayout.items.forEach((item) => {
         const x = marginIn + item.x * scale;
         const y = marginIn + item.y * scale;
-        const rectSize = item.rectSize * scale;
+        const rectWidth = item.rectWidth * scale;
+        const rectHeight = item.rectHeight * scale;
         slide.addShape(pptx.ShapeType.rect, {
           x,
           y,
-          w: rectSize,
-          h: rectSize,
+          w: rectWidth,
+          h: rectHeight,
           fill: { color: colorToPptx(item.colorHex) },
           line: { color: "E2E8F0", width: 0.5 },
           radius: 2
         });
         slide.addText(item.label, {
-          x: marginIn + (item.x + item.rectSize + 6) * scale,
+          x,
           y,
-          w: Math.max(0.1, item.textWidth * scale),
-          h: rectSize,
+          w: rectWidth,
+          h: rectHeight,
           fontFace: "Segoe UI",
           fontSize: Math.max(1, (state.settings.legendTextSizePx ?? 12) * scale * 72),
           color: "1F2933",
