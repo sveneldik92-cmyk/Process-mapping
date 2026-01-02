@@ -895,10 +895,10 @@
       const legendLayout = layoutLegend(layout.width, layout.paddingPx, legendStartY);
       legendLayout.items.forEach((item) => {
         elements.push(
-          `<rect x="${item.x}" y="${item.y}" width="${item.rectSize}" height="${item.rectSize}" rx="4" fill="${item.colorHex}" stroke="rgba(0,0,0,0.1)" />`
+          `<rect x="${item.x}" y="${item.y}" width="${item.rectWidth}" height="${item.rectHeight}" rx="3" fill="${item.colorHex}" stroke="rgba(0,0,0,0.08)" />`
         );
         elements.push(
-          `<text x="${item.x + item.rectSize + 6}" y="${item.y + item.rectSize * 0.7}" fill="#1f2933" font-size="12">${escapeHtml(item.label)}</text>`
+          `<text x="${item.x + item.rectWidth / 2}" y="${item.y + item.rectHeight / 2}" fill="${item.textColor}" font-size="${item.fontSize}" text-anchor="middle" dominant-baseline="middle">${escapeHtml(item.label)}</text>`
         );
       });
 
@@ -916,9 +916,11 @@
     }
 
     function layoutLegend(width, paddingPx, startY) {
-      const rectSize = 18;
-      const gap = 10;
-      const rowGap = 10;
+      const rectHeight = 14;
+      const gap = 8;
+      const rowGap = 8;
+      const fontSize = 11;
+      const textPaddingX = 10;
       let x = paddingPx;
       let y = startY;
       const maxX = width - paddingPx;
@@ -926,27 +928,29 @@
 
       state.legendItems.forEach((item) => {
         const label = item.label || item.key;
-        const textWidth = Math.max(20, label.length * 7);
-        const itemWidth = rectSize + 6 + textWidth + 12;
+        const textWidth = Math.max(22, label.length * 6.4);
+        const rectWidth = Math.max(60, textWidth + textPaddingX * 2);
 
-        if (x + itemWidth > maxX) {
+        if (x + rectWidth > maxX) {
           x = paddingPx;
-          y += rectSize + rowGap;
+          y += rectHeight + rowGap;
         }
 
         items.push({
           x,
           y,
-          rectSize,
-          textWidth,
+          rectHeight,
+          rectWidth,
           label,
-          colorHex: item.colorHex
+          colorHex: item.colorHex,
+          textColor: autoTextColor(item.colorHex),
+          fontSize
         });
 
-        x += itemWidth + gap;
+        x += rectWidth + gap;
       });
 
-      return { items, bottom: y + rectSize };
+      return { items, bottom: y + rectHeight };
     }
 
     function legendColor(key) {
@@ -1250,24 +1254,26 @@
       legendLayout.items.forEach((item) => {
         const x = marginIn + item.x * scale;
         const y = marginIn + item.y * scale;
-        const rectSize = item.rectSize * scale;
+        const rectWidth = item.rectWidth * scale;
+        const rectHeight = item.rectHeight * scale;
         slide.addShape(pptx.ShapeType.rect, {
           x,
           y,
-          w: rectSize,
-          h: rectSize,
+          w: rectWidth,
+          h: rectHeight,
           fill: { color: colorToPptx(item.colorHex) },
           line: { color: "E2E8F0", width: 0.5 },
           radius: 2
         });
         slide.addText(item.label, {
-          x: marginIn + (item.x + item.rectSize + 6) * scale,
+          x,
           y,
-          w: Math.max(0.1, item.textWidth * scale),
-          h: rectSize,
+          w: rectWidth,
+          h: rectHeight,
           fontFace: "Segoe UI",
-          fontSize: Math.max(1, 12 * scale * 72),
-          color: "1F2933",
+          fontSize: Math.max(1, item.fontSize * scale * 72),
+          color: colorToPptx(item.textColor),
+          align: "center",
           valign: "middle"
         });
       });
